@@ -1,0 +1,95 @@
+#!/usr/bin/perl -w
+use strict;
+use Socket;
+use Getopt::Std;
+our($opt_p);
+
+my $FLOWPATH = "/Netflow/RAW";
+my $SUBNET = "140.123";
+my $IPNUM = 65536;
+my %hash;
+
+sub usage {
+  print "$0 [-p flowpath] Year Month Day\n";
+  print "eg:\t$0 -p /Netflow/RAW 2008 01 01\n";
+  exit;
+}
+
+sub initFlow {
+  for (my $i = 0; $i < 256; $i++) {
+    for (my $j = 0; $j < 256; $j++) {
+      my @UDarr = ([0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]);
+      $hash{"$SUBNET.$i.$j"} = \@UDarr;
+    }
+  }
+}
+
+sub addFlow {
+  my ($ip, $hour, $UD, $octets) = @_;
+
+  if (exists($hash{$ip})) {
+    ${$hash{$ip}}[$hour][$UD] += $octets;
+  } else {
+    print "$ip hash bucket is not existed\n";
+    exit;
+  }
+}
+
+sub showFlow {
+  my $count = 0;
+  foreach my $ip (sort {$a cmp $b} keys %hash) {
+    printf("%d\t%s\t", $count++, $ip);
+
+    my $upFlow = 0;
+    my $downFlow = 0;
+
+    for (my $i = 0; $i < 24; $i++) {
+      $upFlow += ${$hash{$ip}}[$i][0];
+      $downFlow += ${$hash{$ip}}[$i][1];
+
+      printf("%llu\t%llu\t", ${$hash{$ip}}[$i][0], ${$hash{$ip}}[$i][1]);
+    }
+
+    printf("%llu\t%llu\t%llu\n", $upFlow, $downFlow, $upFlow + $downFlow);
+  }
+}
+
+sub main {
+  usage() unless (@ARGV >= 3) && getopts("p:");
+  $FLOWPATH = $opt_p if defined($opt_p);
+
+  my $year = $ARGV[0];
+  my $month = $ARGV[1];
+  my $day = $ARGV[2];
+
+  if ($year !~ /^\d{4}$/ || $month !~ /^\d{2}$/ || $day !~ /^\d{2}$/) {
+    usage();
+  } elsif (! -d "$FLOWPATH/$year-$month/$year-$month-$day") {
+    print "Error: $FLOWPATH/$year-$month/$year-$month-$day. No such directory\n";
+  }
+
+  initFlow();
+
+  open PH, "flow-cat $FLOWPATH/$year-$month/$year-$month-$day/ft-v05.2008-03-01.000000+0800 | flow-print -f5 |";
+  <PH>; <PH>;
+  while (<PH>) {
+    chomp;
+    my @arr = split(/\s+/);
+
+    my @firstTime = split(/[\.:]/, $arr[1]);
+    next if ($firstTime[0] ne "$month$day");
+
+    my $hour = $firstTime[1];
+
+    if ($arr[3] =~ /^$SUBNET/ && $arr[6] !~ /^$SUBNET/) {
+      addFlow($arr[3], $hour, 0, $arr[11]);
+    } elsif ($arr[3] !~ /^$SUBNET/ && $arr[6] =~ /^$SUBNET/) {
+      addFlow($arr[6], $hour, 1, $arr[11]);
+    }
+  }
+  close PH;
+
+  showFlow();
+}
+
+main();

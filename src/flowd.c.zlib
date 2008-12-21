@@ -1,0 +1,897 @@
+#include "flowd.h"
+
+static int kq;
+static int netflow_sockfd;
+static int flowd_sockfd;
+static int peerfd;
+
+static char save_prefix[100];
+static char whitefile[100];
+static in_addr_t whitelist[MAX_WHITELIST];
+
+static void change_save_prefix(char *dir)
+{
+  struct stat st;
+
+  if (strlen(dir) > 99)
+    return;
+
+  if (stat(dir, &st) == -1)
+  {
+    warn("stat() in change_save_prefix() error");
+    return;
+  }
+
+  if (S_ISDIR(st.st_mode) && (access(dir, R_OK | W_OK | X_OK) == 0))
+    strncpy(save_prefix, dir, 99);
+}
+
+static int read_whitelist()
+{
+  int i = 0;
+  FILE *fp;
+  char buf[20];
+  in_addr_t addr;
+
+  memset(whitelist, 0, sizeof(in_addr_t) * MAX_WHITELIST);
+
+  if ((fp = fopen(whitefile, "r")) == NULL)
+  {
+    fprintf(stderr, "Open whitelist file %s failed: %s\n", whitefile, strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  while (i < MAX_WHITELIST && ((fgets(buf, 19, fp)) != NULL))
+  {
+    if ((addr = inet_addr(buf)) != INADDR_NONE && ((addr & NETMASK) == IP_PREFIX))
+      whitelist[i++] = addr;
+  }
+
+  fclose(fp);
+
+  return i;
+}
+
+
+static void dump_record(int mode)
+{
+  int i, j;
+  gzFile gzFp;
+  char buf[100];
+
+  if (mode == TODAY)
+    snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d", save_prefix, 
+	localtm->tm_year + 1900, localtm->tm_mon + 1, localtm->tm_mday);
+  else
+  {
+    struct tm *newtm;
+    time_t yesterday;
+
+    yesterday = time(NULL) - 86400;
+    newtm = localtime(&yesterday);
+
+    snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d.gz", save_prefix, 
+	newtm->tm_year + 1900, newtm->tm_mon + 1, newtm->tm_mday);
+  }
+
+  if ((gzFp = gzopen(buf, "wb")) == NULL)
+    diep("gzopen() in dump_record() error");
+
+
+  for (i = 0; i < IP_NUM; i++)
+  {
+    inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), buf, 16);
+    gzprintf(gzFp, "%d\t%s\t", i, buf);
+
+    for (j = 0; j < 24; j++)
+      gzprintf(gzFp, "%llu\t%llu\t", hash_table[i].hflow[j][0], hash_table[i].hflow[j][1]);
+
+    gzprintf(gzFp, "%llu\t%llu\t%llu\n", hash_table[i].nflow[0], hash_table[i].nflow[1], hash_table[i].nflow[2]);
+  }
+
+  gzclose(gzFp);
+}
+
+
+static void restore_record(char *fname)
+{
+  int i, j;
+  int num;
+  gzFile gzFp;
+  char buf[17];
+
+  if (access(fname, R_OK) == -1)
+    return;
+
+  if ((gzFp = gzopen(fname, "rb")) == NULL)
+    diep("gzopen() in restore_record() error");
+
+  for (i = 0; i < IP_NUM; i++)
+  {
+    inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), buf, 16);
+    gzscanf(gzFp, "%d%s", &num, buf);
+
+    if (i != num)
+    {
+      warn("Warn: restore_record() invalid format");
+      continue;
+    }
+
+    hash_table[i].sin_addr.s_addr = inet_addr(buf);
+
+    for (j = 0; j < 24; j++)
+      fscanf(fp, "%llu%llu", &(hash_table[i].hflow[j][0]), &(hash_table[i].hflow[j][1]));
+
+    fscanf(fp, "%llu%llu%llu", &(hash_table[i].nflow[0]), &(hash_table[i].nflow[1]), &(hash_table[i].nflow[2]));
+  }
+
+  fclose(fp);
+}
+
+static void update()
+{
+  read_whitelist();
+
+  if (fork() == 0)
+  {
+    dump_record(TODAY);
+    exit(EXIT_SUCCESS);
+  }
+}
+
+static void usage(char *progname)
+{
+  printf("Usage: %s [-v] [-i listen_ip] [-p netflow_listen_port] [-P flowd_listen_port] [-w whitelist file] [-s save_path]\n", progname);
+}
+
+void warn(char *msg)
+{
+  if (verbose)
+    fprintf(stderr, "%s\n", msg);
+}
+
+void diep(const char *s)
+{
+  perror(s);
+  exit(EXIT_FAILURE);
+}
+
+static void sendbuftosck(int sckfd, const char *buf, int len)
+{
+  int bytessent, pos;
+
+  pos = 0;
+  do {
+    if ((bytessent = send(sckfd, buf + pos, len - pos, 0)) < 0)
+      diep("send()");
+    pos += bytessent;
+  } while (bytessent > 0);
+}
+
+static int build_udp_socket(in_addr_t listen_ipaddr, uint16_t listen_port)
+{
+  int sockfd;
+  struct sockaddr_in sin;
+
+  if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+    diep("socket() error");
+
+  memset(&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_addr.s_addr = listen_ipaddr;
+  sin.sin_port = listen_port;
+
+  if (bind(sockfd, (struct sockaddr *) &sin, sizeof(sin)) == -1)
+    diep("bind() error");
+
+  return sockfd;
+}
+
+static int build_tcp_socket(in_addr_t listen_ipaddr, uint16_t listen_port)
+{
+  int sockfd;
+  struct sockaddr_in sin;
+
+  if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    diep("socket() error");
+
+  memset(&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_addr.s_addr = listen_ipaddr;
+  sin.sin_port = listen_port;
+
+  if (bind(sockfd, (struct sockaddr *) &sin, sizeof(sin)) == -1)
+    diep("bind() error");
+
+  if (listen(sockfd, 2) == -1)
+    diep("listen() error");
+
+  return sockfd;
+}
+
+static void getO_data_by_ip(int year, int month, int day, char *ipaddr, char realmode)
+{
+  int i, j;
+  char *ptr;
+  char buf[BUFSIZE];
+  FILE *fp;
+  in_addr_t ipaddr_in = inet_addr(ipaddr);
+
+  snprintf(buf, BUFSIZE - 1,"%s/flowdata.%04d-%02d-%02d", save_prefix, year, month, day);
+
+  if ((fp = fopen(buf, "r")) == NULL)
+  {
+    snprintf(buf, BUFSIZE - 1, "Open data file failed: %s\n", strerror(errno));
+    sendbuftosck(peerfd, buf, strlen(buf));
+    return;
+  }
+
+  if (realmode == 0)
+  {
+    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+    {
+      if (ipaddr_in == whitelist[j])
+      {
+	snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, (double) 0);
+	strcat(buf, "--------------------------------------------------------\n");
+	strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+	strcat(buf, "--------------------------------------------------------\n");
+	sendbuftosck(peerfd, buf, strlen(buf));
+
+	for (i = 0; i < 24; i++)
+	{
+	  snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
+	  sendbuftosck(peerfd, buf, strlen(buf));
+	}
+	return;
+      }
+    }
+  }
+
+  while (fgets(buf, BUFSIZE - 1, fp))
+  {
+    /* Num */
+    if ((ptr = strtok(buf, " \n\t\r")) == NULL)
+      continue;
+
+    /* IP */
+    if (((ptr = strtok(NULL, " \n\t\r")) != NULL) && (strcmp(ptr, ipaddr) == 0))
+    {
+      unsigned long long hflow[24][2];
+      unsigned long long nflow[3];
+
+      for (i = 0; i < 24; i++)
+      {
+	ptr = strtok(NULL, " \n\t\r");
+	hflow[i][UPLOAD] = strtoull(ptr, (char **) NULL, 10);
+
+	ptr = strtok(NULL, " \n\t\r");
+	hflow[i][DOWNLOAD] = strtoull(ptr, (char **) NULL, 10);
+      }
+
+      ptr = strtok(NULL, " \n\t\r");
+      nflow[UPLOAD] = strtoull(ptr, (char **) NULL, 10);
+
+      ptr = strtok(NULL, " \n\t\r");
+      nflow[DOWNLOAD] = strtoull(ptr, (char **) NULL, 10);
+
+      ptr = strtok(NULL, " \n\t\r");
+      nflow[SUM] = strtoull(ptr, (char **) NULL, 10);
+
+      snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, 
+	  ((double) nflow[SUM]) / MBYTES);
+      strcat(buf, "--------------------------------------------------------\n");
+      strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+      strcat(buf, "--------------------------------------------------------\n");
+      sendbuftosck(peerfd, buf, strlen(buf));
+
+      for (i = 0; i < 24; i++)
+      {
+	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
+	    ((double) (hflow[i][UPLOAD])) / MBYTES,
+	    ((double) (hflow[i][DOWNLOAD])) / MBYTES,
+	    ((double) (hflow[i][UPLOAD] + hflow[i][DOWNLOAD])) / MBYTES);
+	sendbuftosck(peerfd, buf, strlen(buf));
+      }
+
+      fclose(fp);
+      return;
+    }
+  }
+  sendbuftosck(peerfd, "No data\n", 8);
+  fclose(fp);
+}
+
+static void get_data_by_ip(char *ipaddr, char realmode)
+{
+  int i, j;
+  int hash_value;
+  in_addr_t ipaddr_in;
+  char buf[BUFSIZE];
+  char time[20];
+
+  if (((ipaddr_in = inet_addr(ipaddr)) & NETMASK) == IP_PREFIX)
+  {
+    if (realmode == 0)
+    {
+      for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+      {
+	if (ipaddr_in == whitelist[j])
+	{
+	  strftime(time, 19, "%F %T", localtm);
+	  snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time, (double) 0);
+	  strcat(buf, "--------------------------------------------------------\n");
+	  strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+	  strcat(buf, "--------------------------------------------------------\n");
+	  sendbuftosck(peerfd, buf, strlen(buf));
+
+	  for (i = 0; i < 24; i++)
+	  {
+	    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
+	    sendbuftosck(peerfd, buf, strlen(buf));
+	  }
+
+	  return;
+	}
+      }
+    }
+
+    hash_value = hash(ipaddr_in);
+
+    strftime(time, 19, "%F %T", localtm);
+    snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time,
+	((double) hash_table[hash_value].nflow[SUM]) / MBYTES);
+    strcat(buf, "--------------------------------------------------------\n");
+    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+    strcat(buf, "--------------------------------------------------------\n");
+    sendbuftosck(peerfd, buf, strlen(buf));
+    for (i = 0; i < 24; i++)
+    {
+      snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
+	  ((double) (hash_table[hash_value].hflow[i][UPLOAD])) / MBYTES,
+	  ((double) (hash_table[hash_value].hflow[i][DOWNLOAD])) / MBYTES,
+	  ((double) (hash_table[hash_value].hflow[i][UPLOAD] + hash_table[hash_value].hflow[i][DOWNLOAD])) / MBYTES);
+      sendbuftosck(peerfd, buf, strlen(buf));
+    }
+  }
+}
+
+static int hostflow_compare(const void *a, const void *b)
+{
+  struct hostflow *tmp_a = (struct hostflow *) a;
+  struct hostflow *tmp_b = (struct hostflow *) b;
+  long long int res = tmp_b->nflow[SUM] - tmp_a->nflow[SUM];
+
+  if (res > 0)
+    return 1;
+  else if (res < 0)
+    return -1;
+  else
+    return 0;
+}
+
+static void get_overMB_flow(int overMB, char realmode)
+{
+  int i = 0, j;
+  int n = 0;
+  char buf[BUFSIZE];
+  char ip[17];
+  char show;
+
+  if (overMB > 0)
+  {
+    char time[20];
+
+    qsort(hash_table, IP_NUM, sizeof(struct hostflow), hostflow_compare);
+
+    strftime(time, 19, "%F %T", localtm);
+    snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
+    strcat(buf, "------------------------------------------------------------------------------------\n");
+    sendbuftosck(peerfd, buf, strlen(buf));
+
+    while ((hash_table[i].nflow[SUM] / MBYTES) >= overMB)
+    {
+      show = 1;
+      inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), ip, 16);
+
+      if (realmode == 0)
+      {
+	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+	{
+	  if (hash_table[i].sin_addr.s_addr == whitelist[j])
+	    show = 0;
+	}
+      }
+
+      if (show == 1)
+      {
+	snprintf(buf, BUFSIZE - 1, "%5d\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++n, ip,
+	    ((double) hash_table[i].nflow[UPLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[DOWNLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[SUM]) / MBYTES);
+	sendbuftosck(peerfd, buf, strlen(buf));
+      }
+      ++i;
+    }
+  }
+}
+
+static void getO_overMB_flow(int year, int month, int day, int overMB, char realmode)
+{
+  int i = 0, j;
+  int n = 0;
+  char buf[BUFSIZE];
+  char ip[17];
+  char show;
+  FILE *fp;
+
+  snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", save_prefix, year, month, day);
+
+  if ((fp = fopen(buf, "r")) == NULL)
+  {
+    snprintf(buf, BUFSIZE - 1, "Open data file failed: %s\n", strerror(errno));
+    sendbuftosck(peerfd, buf, strlen(buf));
+    return;
+  }
+
+  memset(hash_table, 0, sizeof(struct hostflow) * IP_NUM);
+  restore_record(buf);
+
+  if (overMB > 0)
+  {
+    qsort(hash_table, IP_NUM, sizeof(struct hostflow), hostflow_compare);
+
+    snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+    strcat(buf, "------------------------------------------------------------------------------------\n");
+    sendbuftosck(peerfd, buf, strlen(buf));
+
+    while ((hash_table[i].nflow[SUM] / MBYTES) >= overMB)
+    {
+      show = 1;
+      inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), ip, 16);
+
+      if (realmode == 0)
+      {
+	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+	{
+	  if (hash_table[i].sin_addr.s_addr == whitelist[j])
+	    show = 0;
+	}
+      }
+
+      if (show == 1)
+      {
+	snprintf(buf, BUFSIZE - 1, "%5d\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++n, ip,
+	    ((double) hash_table[i].nflow[UPLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[DOWNLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[SUM]) / MBYTES);
+	sendbuftosck(peerfd, buf, strlen(buf));
+      }
+      ++i;
+    }
+  }
+
+  fclose(fp);
+}
+
+static void get_topN_flow(int topN, char realmode)
+{
+  int i = 0, j;
+  int n = 0;
+  char buf[BUFSIZE];
+  char ip[17];
+  char show;
+
+  if (topN > 0 && topN < IP_NUM)
+  {
+    char time[20];
+
+    qsort(hash_table, IP_NUM, sizeof(struct hostflow), hostflow_compare);
+
+    strftime(time, 19, "%F %T", localtm);
+    snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
+    strcat(buf, "------------------------------------------------------------------------------------\n");
+    sendbuftosck(peerfd, buf, strlen(buf));
+
+    while (n < topN)
+    {
+      show = 1;
+      inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), ip, 16);
+
+      if (realmode == 0)
+      {
+	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+	{
+	  if (hash_table[i].sin_addr.s_addr == whitelist[j])
+	    show = 0;
+	}
+      }
+
+      if (show == 1)
+      {
+	snprintf(buf, BUFSIZE - 1, "%5d\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++n, ip,
+	    ((double) hash_table[i].nflow[UPLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[DOWNLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[SUM]) / MBYTES);
+	sendbuftosck(peerfd, buf, strlen(buf));
+      }
+      ++i;
+    }
+  }
+}
+
+static void getO_topN_flow(int year, int month, int day, int topN, char realmode)
+{
+  int i = 0, j;
+  int n = 0;
+  char buf[BUFSIZE];
+  char ip[17];
+  char show;
+  FILE *fp;
+
+  snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", save_prefix, year, month, day);
+
+  if ((fp = fopen(buf, "r")) == NULL)
+  {
+    snprintf(buf, BUFSIZE - 1, "Open data file failed: %s\n", strerror(errno));
+    sendbuftosck(peerfd, buf, strlen(buf));
+    return;
+  }
+
+  memset(hash_table, 0, sizeof(struct hostflow) * IP_NUM);
+  restore_record(buf);
+
+  if (topN > 0 && topN < IP_NUM)
+  {
+    qsort(hash_table, IP_NUM, sizeof(struct hostflow), hostflow_compare);
+
+    snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+    strcat(buf, "------------------------------------------------------------------------------------\n");
+    sendbuftosck(peerfd, buf, strlen(buf));
+
+    while (n < topN)
+    {
+      show = 1;
+      inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), ip, 16);
+
+      if (realmode == 0)
+      {
+	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
+	{
+	  if (hash_table[i].sin_addr.s_addr == whitelist[j])
+	    show = 0;
+	}
+      }
+
+      if (show == 1)
+      {
+	snprintf(buf, BUFSIZE - 1, "%5d\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++n, ip,
+	    ((double) hash_table[i].nflow[UPLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[DOWNLOAD]) / MBYTES,
+	    ((double) hash_table[i].nflow[SUM]) / MBYTES);
+	sendbuftosck(peerfd, buf, strlen(buf));
+      }
+      ++i;
+    }
+  }
+
+  fclose(fp);
+}
+
+static void parse_cmd(char *cmd)
+{
+  char *ptr;
+
+  ptr = strtok(cmd, " \n\t\r");
+  if (ptr == NULL)
+  {
+    sendbuftosck(peerfd, "Invalid Command.\n", 18);
+    return;
+  }
+
+  // Get Command
+  if (strcasecmp(ptr, "get") == 0)
+  {
+    char *ipPtr;
+
+    ptr = strtok(NULL, " \n\t\r");
+    if (ptr == NULL)
+    {
+      sendbuftosck(peerfd, "Invalid Command.\n", 18);
+      return;
+    }
+
+    ipPtr = ptr;
+    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+      get_data_by_ip(ipPtr, 1);
+    else
+      get_data_by_ip(ipPtr, 0);
+  }
+  else if (strcasecmp(ptr, "getO") == 0)
+  {
+    int year, month, day;
+    char *ipPtr;
+
+    if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (ipPtr = ptr))
+    {
+      if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+	getO_data_by_ip(year, month, day, ipPtr, 1);
+      else
+	getO_data_by_ip(year, month, day, ipPtr, 0);
+
+      return;
+    }
+
+    sendbuftosck(peerfd, "Invalid Command.\n", 18);
+  }
+  // Over Command
+  else if (strcasecmp(ptr, "over") == 0)
+  {
+    char *overMBPtr;
+
+    ptr = strtok(NULL, " \n\t\r");
+    if (ptr == NULL)
+    {
+      sendbuftosck(peerfd, "Invalid Command.\n", 18);
+      return;
+    }
+
+    overMBPtr = ptr;
+    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+      get_overMB_flow(atoi(overMBPtr), 1);
+    else
+      get_overMB_flow(atoi(overMBPtr), 0);
+  }
+  else if (strcasecmp(ptr, "overO") == 0)
+  {
+    int year, month, day, overMB;
+
+    if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (overMB = atoi(ptr)) > 0)
+    {
+      if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+        getO_overMB_flow(year, month, day, overMB, 1);
+      else
+        getO_overMB_flow(year, month, day, overMB, 0);
+
+      return;
+    }
+
+    sendbuftosck(peerfd, "Invalid Command.\n", 18);
+  }
+  // Top Command
+  else if (strcasecmp(ptr, "top") == 0)
+  {
+    char *topNPtr;
+
+    ptr = strtok(NULL, " \n\t\r");
+    if (ptr == NULL)
+    {
+      sendbuftosck(peerfd, "Invalid Command.\n", 18);
+      return;
+    }
+
+    topNPtr = ptr;
+    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+      get_topN_flow(atoi(topNPtr), 1);
+    else
+      get_topN_flow(atoi(topNPtr), 0);
+  }
+  else if (strcasecmp(ptr, "topO") == 0)
+  {
+    int year, month, day, topN;
+
+    if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
+    else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (topN = atoi(ptr)) > 0)
+    {
+      if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
+        getO_topN_flow(year, month, day, topN, 1);
+      else
+        getO_topN_flow(year, month, day, topN, 0);
+
+      return;
+    }
+
+    sendbuftosck(peerfd, "Invalid Command.\n", 18);
+  }
+  else
+    sendbuftosck(peerfd, "Invalid Command.\n", 18);
+}
+
+static void exits()
+{
+  close(netflow_sockfd);
+  close(flowd_sockfd);
+  close(kq);
+  dump_record(TODAY);
+  free(hash_table);
+  exit(EXIT_SUCCESS);
+}
+
+static void sckexit()
+{
+  sendbuftosck(peerfd, "Timeout.\n", 9);
+  close(netflow_sockfd);
+  close(flowd_sockfd);
+  close(kq);
+  free(hash_table);
+  exit(EXIT_SUCCESS);
+}
+
+int main(int argc, char *argv[])
+{
+  int ch;
+  int i, n;
+  char buf[BUFSIZE];
+  struct sockaddr_in pin;
+  socklen_t plen;
+  time_t now;
+  char prehour;
+
+  in_addr_t listen_ipaddr;
+  uint16_t netflow_listen_port;
+  uint16_t flowd_listen_port;
+
+  int nev;
+  struct kevent chlist[2];
+  struct kevent evlist[2];
+
+  verbose = 0;
+  strncpy(save_prefix, DEFAULT_SAVE_PREFIX, 99);
+  strncpy(whitefile, DEFAULT_WHITELIST, 99);
+
+  listen_ipaddr = INADDR_ANY;
+  netflow_listen_port = htons(NETFLOW_LISTEN_PORT);
+  flowd_listen_port = htons(FLOWD_LISTEN_PORT);
+
+  while ((ch = getopt(argc, argv, "i:p:P:s:vw:")) != -1)
+    switch ((char) ch)
+    {
+      case 'i':		/* Listen IP */
+	listen_ipaddr = inet_addr(optarg);
+	break;
+
+      case 'p':		/* Netflow Listen Port */
+	n = htons(atoi(optarg));
+	if (n > 0 && n < 65535)
+	  netflow_listen_port = htons(atoi(optarg));
+	else
+	  netflow_listen_port = htons(NETFLOW_LISTEN_PORT);
+	break;
+
+      case 'P':		/* Flowd Listen Port */
+	n = htons(atoi(optarg));
+	if (n > 0 && n < 65535)
+	  flowd_listen_port = htons(atoi(optarg));
+	else
+	  flowd_listen_port = htons(FLOWD_LISTEN_PORT);
+	break;
+
+      case 's':		/* Path prefix to store */
+	change_save_prefix(optarg);
+	break;
+
+      case 'v':		/* Verbose mode */
+	verbose = 1;
+	break;
+
+      case 'w':
+	strncpy(whitefile, optarg, 99);
+	break;
+      case '?':
+      default:
+	usage(argv[0]);
+	return -1;
+    }
+
+  read_whitelist();
+  hash_table = (struct hostflow *) malloc(sizeof(struct hostflow) * IP_NUM);
+  if (hash_table == NULL)
+  {
+    fprintf(stderr, "Failed to allocate memory %d bytes\n", sizeof(struct hostflow) * IP_NUM);
+    return -1;
+  }
+  memset(hash_table, 0, sizeof(struct hostflow) * IP_NUM);
+
+  now = time(NULL);
+  localtm = localtime(&now);
+  prehour = localtm->tm_hour;
+
+  signal(SIGCHLD, SIG_IGN);
+  signal(SIGTSTP, SIG_IGN);
+  signal(SIGINT, &exits);
+  signal(SIGTERM, &exits);
+  signal(SIGHUP, &update);
+
+  snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", save_prefix, 
+      localtm->tm_year + 1900, localtm->tm_mon + 1, localtm->tm_mday);
+
+  restore_record(buf);
+  setvbuf(stdout, NULL, _IONBF, 0);
+
+  netflow_sockfd = build_udp_socket(listen_ipaddr, netflow_listen_port);
+  flowd_sockfd = build_tcp_socket(listen_ipaddr, flowd_listen_port);
+
+  if ((kq = kqueue()) == -1)
+    diep("kqueue() error");
+
+  EV_SET(&chlist[0], netflow_sockfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+  EV_SET(&chlist[1], flowd_sockfd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+
+  plen = sizeof(struct sockaddr_in);
+
+  while (1)
+  {
+    nev = kevent(kq, chlist, 2, evlist, 2, NULL);
+
+    if (nev < 0 && errno != EINTR)
+      diep("kevent() error");
+
+    for (i = 0; i < nev; i++) 
+    {
+      if (evlist[i].flags & EV_ERROR) 
+      {
+	fprintf(stderr, "kevent() EV_ERROR: %s\n", strerror(evlist[i].data));
+	exit(EXIT_FAILURE);
+      }
+
+      if (evlist[i].ident == netflow_sockfd)
+      {
+	memset(buf, 0, BUFSIZE);
+	if ((n = recvfrom(netflow_sockfd, buf, BUFSIZE, 0, (struct sockaddr *) &pin, &plen)) == -1)
+	{
+	  perror("recvfrom() error");
+	  continue;
+	}
+
+	now = time(NULL);
+	localtm = localtime(&now);
+
+	if (prehour == 23 && localtm->tm_hour == 0)
+	{
+	  dump_record(YESTERDAY);
+	  memset(hash_table, 0, sizeof(struct hostflow) * IP_NUM);
+	  prehour = localtm->tm_hour;
+	}
+	else
+	  prehour = localtm->tm_hour;
+
+	if ((ch = is_valid_NF_format(buf, n)) > 0)
+	  insert_record_to_hash(buf, ch);
+      }
+      else if (evlist[i].ident == flowd_sockfd)
+      {
+	if ((peerfd = accept(flowd_sockfd, (struct sockaddr *) &pin, &plen)) == -1)
+	{
+	  diep("accept() error");
+	  continue;
+	}
+
+	if (fork() == 0)
+	{
+	  signal(SIGALRM, &sckexit);
+	  alarm(30);
+
+	  n = recv(peerfd, buf, BUFSIZE, 0);
+	  parse_cmd(buf);
+	  exit(EXIT_SUCCESS);
+	}
+	close(peerfd);
+      }
+    }
+  }
+
+  close(kq);
+  close(netflow_sockfd);
+  close(flowd_sockfd);
+  free(hash_table);
+  return 0;
+}
+
