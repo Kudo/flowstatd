@@ -5,7 +5,7 @@ extern int flowdSockFd;
 extern int peerFd;
 extern int kq;
 
-void SendBufToSck(int sckfd, const char *buf, int len)
+void SendBufToSock(int sckfd, const char *buf, int len)
 {
     int bytessent, pos;
 
@@ -17,7 +17,7 @@ void SendBufToSck(int sckfd, const char *buf, int len)
     } while (bytessent > 0);
 }
 
-int BuildUDPSck(in_addr_t listen_ipaddr, uint16_t listen_port)
+int BuildUDPSock(in_addr_t listen_ipaddr, uint16_t listen_port)
 {
     int sockfd;
     struct sockaddr_in sin;
@@ -36,7 +36,7 @@ int BuildUDPSck(in_addr_t listen_ipaddr, uint16_t listen_port)
     return sockfd;
 }
 
-int BuildTCPSck(in_addr_t listen_ipaddr, uint16_t listen_port)
+int BuildTCPSock(in_addr_t listen_ipaddr, uint16_t listen_port)
 {
     int sockfd;
     struct sockaddr_in sin;
@@ -69,9 +69,9 @@ void Exits(int s)
     exit(EXIT_SUCCESS);
 }
 
-void SckExit(int s)
+void SockExit(int s)
 {
-    SendBufToSck(peerFd, "Timeout.\n", 9);
+    SendBufToSock(peerFd, "Timeout.\n", 9);
     close(netflowSockFd);
     close(flowdSockFd);
     close(kq);

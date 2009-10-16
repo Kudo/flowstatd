@@ -207,15 +207,17 @@ static int MapTable()
 
     qsort(rcvNetList, nSubnet, sizeof(struct subnet), RcvNetListCmp);
 
+    /*
     for (i = 0; i < nSubnet; ++i)
     {
-
 	ipTable[n++] = 
     }
+    */
 
     return 1;
 }
-void Warn(char *msg)
+
+void Warn(const char *msg)
 {
     if (verbose)
 	fprintf(stderr, "%s\n", msg);
@@ -332,8 +334,8 @@ int main(int argc, char *argv[])
     ImportRecord(buf);
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    netflowSockFd = BuildUDPSck(bindIpAddr, netflowBindPort);
-    flowdSockFd = BuildTCPSck(bindIpAddr, flowdBindPort);
+    netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
+    flowdSockFd = BuildTCPSock(bindIpAddr, flowdBindPort);
 
     if ((kq = kqueue()) == -1)
 	Diep("kqueue() error");
@@ -373,7 +375,7 @@ int main(int argc, char *argv[])
 		if (preHour == 23 && localtm->tm_hour == 0)
 		{
 		    ExportRecord(YESTERDAY);
-		    memset(hashTable, 0, sizeof(struct hostflow) * sumIpCount);
+		    memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
 		    preHour = localtm->tm_hour;
 		}
 		else
@@ -392,7 +394,7 @@ int main(int argc, char *argv[])
 
 		if (fork() == 0)
 		{
-		    signal(SIGALRM, &SckExit);
+		    signal(SIGALRM, &SockExit);
 		    alarm(30);
 
 		    n = recv(peerFd, buf, BUFSIZE, 0);
@@ -407,7 +409,7 @@ int main(int argc, char *argv[])
     close(kq);
     close(netflowSockFd);
     close(flowdSockFd);
-    free(hashTable);
+    free(ipTable);
 
     return 0;
 }

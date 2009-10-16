@@ -16,7 +16,7 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
     if ((fp = fopen(buf, "r")) == NULL)
     {
 	snprintf(buf, BUFSIZE - 1, "Open data file failed: %s\n", strerror(errno));
-	SendBufToSck(peerFd, buf, strlen(buf));
+	SendBufToSock(peerFd, buf, strlen(buf));
 	return;
     }
 
@@ -30,12 +30,12 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 		strcat(buf, "--------------------------------------------------------\n");
 		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
 		strcat(buf, "--------------------------------------------------------\n");
-		SendBufToSck(peerFd, buf, strlen(buf));
+		SendBufToSock(peerFd, buf, strlen(buf));
 
 		for (i = 0; i < 24; i++)
 		{
 		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
-		    SendBufToSck(peerFd, buf, strlen(buf));
+		    SendBufToSock(peerFd, buf, strlen(buf));
 		}
 		return;
 	    }
@@ -77,7 +77,7 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	    strcat(buf, "--------------------------------------------------------\n");
 	    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
 	    strcat(buf, "--------------------------------------------------------\n");
-	    SendBufToSck(peerFd, buf, strlen(buf));
+	    SendBufToSock(peerFd, buf, strlen(buf));
 
 	    for (i = 0; i < 24; i++)
 	    {
@@ -85,14 +85,14 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 			((double) (hflow[i][UPLOAD])) / MBYTES,
 			((double) (hflow[i][DOWNLOAD])) / MBYTES,
 			((double) (hflow[i][UPLOAD] + hflow[i][DOWNLOAD])) / MBYTES);
-		SendBufToSck(peerFd, buf, strlen(buf));
+		SendBufToSock(peerFd, buf, strlen(buf));
 	    }
 
 	    fclose(fp);
 	    return;
 	}
     }
-    SendBufToSck(peerFd, "No data\n", 8);
+    SendBufToSock(peerFd, "No data\n", 8);
     fclose(fp);
 }
 
@@ -114,7 +114,7 @@ static void GetByIP(char *ipaddr, char realmode)
 
     if (isOurNet == 0)
     {
-	SendBufToSck(peerFd, "No data\n", 8);
+	SendBufToSock(peerFd, "No data\n", 8);
 	return;
     }
 
@@ -129,12 +129,12 @@ static void GetByIP(char *ipaddr, char realmode)
 		strcat(buf, "--------------------------------------------------------\n");
 		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
 		strcat(buf, "--------------------------------------------------------\n");
-		SendBufToSck(peerFd, buf, strlen(buf));
+		SendBufToSock(peerFd, buf, strlen(buf));
 
 		for (i = 0; i < 24; i++)
 		{
 		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
-		    SendBufToSck(peerFd, buf, strlen(buf));
+		    SendBufToSock(peerFd, buf, strlen(buf));
 		}
 
 		return;
@@ -150,14 +150,14 @@ static void GetByIP(char *ipaddr, char realmode)
     strcat(buf, "--------------------------------------------------------\n");
     strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
     strcat(buf, "--------------------------------------------------------\n");
-    SendBufToSck(peerFd, buf, strlen(buf));
+    SendBufToSock(peerFd, buf, strlen(buf));
     for (i = 0; i < 24; i++)
     {
 	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
 		((double) (hashTable[n][hash_value].hflow[i][UPLOAD])) / MBYTES,
 		((double) (hashTable[n][hash_value].hflow[i][DOWNLOAD])) / MBYTES,
 		((double) (hashTable[n][hash_value].hflow[i][UPLOAD] + hashTable[n][hash_value].hflow[i][DOWNLOAD])) / MBYTES);
-	SendBufToSck(peerFd, buf, strlen(buf));
+	SendBufToSock(peerFd, buf, strlen(buf));
     }
 }
 
@@ -186,7 +186,7 @@ static void GetByFlow(int overMB, char realmode)
     strftime(time, 19, "%F %T", localtm);
     snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
     strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSck(peerFd, buf, strlen(buf));
+    SendBufToSock(peerFd, buf, strlen(buf));
 
     i = 0;
     while ((hashTable[i].nflow[SUM] / MBYTES) >= overMB)
@@ -209,7 +209,7 @@ static void GetByFlow(int overMB, char realmode)
 		    ((double) hashTable[i].nflow[UPLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[DOWNLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSck(peerFd, buf, strlen(buf));
+	    SendBufToSock(peerFd, buf, strlen(buf));
 	}
 	++i;
     }
@@ -230,7 +230,7 @@ static void GetOldByFlow(int year, int month, int day, int overMB, char realmode
 
     if (ImportRecord(buf) == 0)
     {
-	SendBufToSck(peerFd, "No data\n", 8);
+	SendBufToSock(peerFd, "No data\n", 8);
 	return;
     }
 
@@ -241,7 +241,7 @@ static void GetOldByFlow(int year, int month, int day, int overMB, char realmode
 
     snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
     strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSck(peerFd, buf, strlen(buf));
+    SendBufToSock(peerFd, buf, strlen(buf));
 
     i = 0;
     while ((hashTable[i].nflow[SUM] / MBYTES) >= overMB)
@@ -264,7 +264,7 @@ static void GetOldByFlow(int year, int month, int day, int overMB, char realmode
 		    ((double) hashTable[i].nflow[UPLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[DOWNLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSck(peerFd, buf, strlen(buf));
+	    SendBufToSock(peerFd, buf, strlen(buf));
 	}
 	++i;
     }
@@ -287,7 +287,7 @@ static void GetByTopN(int topN, char realmode)
     strftime(time, 19, "%F %T", localtm);
     snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
     strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSck(peerFd, buf, strlen(buf));
+    SendBufToSock(peerFd, buf, strlen(buf));
 
     i = 0;
     while (count < topN)
@@ -310,7 +310,7 @@ static void GetByTopN(int topN, char realmode)
 		    ((double) hashTable[i].nflow[UPLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[DOWNLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSck(peerFd, buf, strlen(buf));
+	    SendBufToSock(peerFd, buf, strlen(buf));
 	}
 	++i;
     }
@@ -331,7 +331,7 @@ static void GetOldByTopN(int year, int month, int day, int topN, char realmode)
 
     if (ImportRecord(buf) == 0)
     {
-	SendBufToSck(peerFd, "No data\n", 8);
+	SendBufToSock(peerFd, "No data\n", 8);
 	return;
     }
 
@@ -341,7 +341,7 @@ static void GetOldByTopN(int year, int month, int day, int topN, char realmode)
 
     snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
     strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSck(peerFd, buf, strlen(buf));
+    SendBufToSock(peerFd, buf, strlen(buf));
 
     i = 0;
     while (count < topN)
@@ -364,7 +364,7 @@ static void GetOldByTopN(int year, int month, int day, int topN, char realmode)
 		    ((double) hashTable[i].nflow[UPLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[DOWNLOAD]) / MBYTES,
 		    ((double) hashTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSck(peerFd, buf, strlen(buf));
+	    SendBufToSock(peerFd, buf, strlen(buf));
 	}
 	++i;
     }
@@ -377,7 +377,7 @@ void parseCmd(char *cmd)
     ptr = strtok(cmd, " \n\t\r");
     if (ptr == NULL)
     {
-	SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	SendBufToSock(peerFd, "Invalid Command.\n", 18);
 	return;
     }
 
@@ -389,7 +389,7 @@ void parseCmd(char *cmd)
 	ptr = strtok(NULL, " \n\t\r");
 	if (ptr == NULL)
 	{
-	    SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
 	    return;
 	}
 
@@ -417,7 +417,7 @@ void parseCmd(char *cmd)
 	    return;
 	}
 
-	SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	SendBufToSock(peerFd, "Invalid Command.\n", 18);
     }
     // Over Command
     else if (strcasecmp(ptr, "over") == 0)
@@ -427,7 +427,7 @@ void parseCmd(char *cmd)
 	ptr = strtok(NULL, " \n\t\r");
 	if (ptr == NULL)
 	{
-	    SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
 	    return;
 	}
 
@@ -454,7 +454,7 @@ void parseCmd(char *cmd)
 	    return;
 	}
 
-	SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	SendBufToSock(peerFd, "Invalid Command.\n", 18);
     }
     // Top Command
     else if (strcasecmp(ptr, "top") == 0)
@@ -464,7 +464,7 @@ void parseCmd(char *cmd)
 	ptr = strtok(NULL, " \n\t\r");
 	if (ptr == NULL)
 	{
-	    SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
 	    return;
 	}
 
@@ -491,9 +491,9 @@ void parseCmd(char *cmd)
 	    return;
 	}
 
-	SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	SendBufToSock(peerFd, "Invalid Command.\n", 18);
     }
     else
-	SendBufToSck(peerFd, "Invalid Command.\n", 18);
+	SendBufToSock(peerFd, "Invalid Command.\n", 18);
 }
 
