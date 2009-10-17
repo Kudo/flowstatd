@@ -65,7 +65,7 @@ void Exits(int s)
     close(flowdSockFd);
     close(kq);
     ExportRecord(TODAY);
-    free(hash_table);
+    free(ipTable);
     exit(EXIT_SUCCESS);
 }
 
@@ -75,6 +75,6 @@ void SockExit(int s)
     close(netflowSockFd);
     close(flowdSockFd);
     close(kq);
-    free(hash_table);
+    free(ipTable);
     exit(EXIT_SUCCESS);
 }

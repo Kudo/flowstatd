@@ -21,11 +21,6 @@
 #define MBYTES		1000000
 #define	BUFSIZE		8192
 
-#define	NETMASK		0x0000ffff
-
-#define	IP_PREFIX		0x00007b8c		// 140.123.0.0/16
-//#define	IP_NUM			7680			// 256 (Class C)   x   3 (一棟最多三個網段)   x    10 (宿舍數)     = 7680
-#define	IP_NUM			65536			// Class B
 #define	MAX_WHITELIST	50
 #define MAX_SUBNET	50
 
@@ -66,8 +61,8 @@ struct subnet {
  * From flow-tools library
  */
 struct fttime {
-    int secs;
-    int msecs;
+    uint secs;
+    uint msecs;
 };
 
 #define	NF_HEADER_SIZE	sizeof(struct NF_header)
@@ -111,14 +106,14 @@ struct NF_record {
 /*
  * Global variables
  */
-int verbose;
-struct tm *localtm;
-struct hostflow *ipTable;
-struct hostflow *hashTable;
-struct subnet rcvNetList[MAX_SUBNET];
-in_addr_t whitelist[MAX_WHITELIST];
-uint nSubnet;
-uint sumIpCount;
+extern int verbose;
+extern struct tm localtm;
+extern struct hostflow *ipTable;
+extern struct hostflow *hashTable;
+extern struct subnet rcvNetList[MAX_SUBNET];
+extern in_addr_t whitelist[MAX_WHITELIST];
+extern uint nSubnet;
+extern uint sumIpCount;
 
 #include "flowd.p"
 

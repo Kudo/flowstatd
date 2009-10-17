@@ -8,7 +8,7 @@ CC	= gcc
 CPROTO	= cproto
 #CFLAGS	= -O2 -Wall
 CFLAGS	= -g -Wall
-SRC	= command.c netflow.c flowd.c fttime.c socket.c
+SRC	= command.c netflow.c flowd.c fttime.c socket.c global.c
 OBJ	= $(SRC:.c=.o)
 
 .SUFFIXES: .o

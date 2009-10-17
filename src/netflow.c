@@ -1,21 +1,31 @@
 #include "flowd.h"
 
-inline int getIPIdx(in_addr_t ipaddr, uchar maskBits)
+inline int getIPIdx(in_addr_t ipaddr)
 {
-    uint i;
     uchar isHit = 0;
     uint idx = 0;
+    int leftPos = 0;
+    int rightPos = nSubnet - 1;
 
-    for (i = 0; i < nSubnet; ++i)
+    while (leftPos <= rightPos)
     {
-	if ((ipaddr & rcvNetList[i].mask) == rcvNetList[i].net)
+	int midPos = leftPos + ((rightPos - leftPos) / 2);
+	in_addr_t ipAddrNet = ipaddr & rcvNetList[midPos].mask;
+
+	if (ipAddrNet > rcvNetList[midPos].net)
+	    leftPos = midPos + 1;
+	else if (ipAddrNet < rcvNetList[midPos].net)
+	    rightPos = midPos - 1;
+	else
 	{
-	    idx += ntohs(ipaddr >> rcvNetList[i].maskBits);
+	    int k;
+	    for (k = 0; k < (int) midPos; ++k)
+		idx += rcvNetList[k].ipCount;
+
+	    idx += (ipaddr & ~rcvNetList[midPos].mask) >> rcvNetList[midPos].maskBits;
 	    isHit = 1;
 	    break;
 	}
-	
-	idx += rcvNetList[i].ipCount;
     }
 
     if (isHit > 0)
@@ -48,16 +58,16 @@ int isValidNFP(const char *buf, int len)
     return recCount;
 }
 
-void PushRecord(char *buf, int recCount)
+void InsertFlowEntry(char *buf, int recCount)
 {
-    int i, j;
+    int i;
     int srcIPIdx, dstIPIdx;
     int octets;
     char *ptr;
     struct NF_header *header;
     struct NF_record *record;
     struct fttime ftt;
-    struct tm *tm;
+    struct tm tmTime;
 
     header = (struct NF_header *) buf;
     ptr = buf + NF_HEADER_SIZE;
@@ -85,11 +95,11 @@ void PushRecord(char *buf, int recCount)
 	}
 
 	ftt = ftltime(ntohl(header->SysUptime), ntohl(header->unix_secs), ntohl(header->unix_nsecs), ntohl(record->First));
-	tm = localtime((time_t *) &ftt.secs);
+	localtime_r((time_t *) &ftt.secs, &tmTime);
 	octets = ntohl(record->dOctets);
 
-	srcIPIdx = getIPIdx(record->srcaddr, record->src_mask);
-	dstIPIdx = getIPIdx(record->dstaddr, record->dst_mask);
+	srcIPIdx = getIPIdx(record->srcaddr);
+	dstIPIdx = getIPIdx(record->dstaddr);
 
 #if 1
 	if (srcIPIdx >= 0 && dstIPIdx == -1)
@@ -97,12 +107,12 @@ void PushRecord(char *buf, int recCount)
 	if (srcIPIdx >= 0)
 #endif
 	{
-	    //	if (tm->tm_hour == localtm->tm_hour)
+	    //	if (tmTime.tm_hour == localtm.tm_hour)
 	    {
 		//	  if (record->srcaddr == inet_addr("140.123.238.189"))
-		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[srcIPIdx].hflow[tm->tm_hour][UPLOAD], octets, ipTable[srcIPIdx].hflow[tm->tm_hour][UPLOAD] + octets);
+		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD], octets, ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] + octets);
 		ipTable[srcIPIdx].sin_addr.s_addr = record->srcaddr;
-		ipTable[srcIPIdx].hflow[tm->tm_hour][UPLOAD] += octets;
+		ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[SUM] += octets;
 	    }
@@ -114,13 +124,13 @@ void PushRecord(char *buf, int recCount)
 #endif
 	{
 
-	    //	if (tm->tm_hour == localtm->tm_hour)
+	    //	if (tmTime.tm_hour == localtm.tm_hour)
 	    {
 		//	  if (record->dstaddr == inet_addr("140.123.238.189"))
-		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[dstIPIdx].hflow[tm->tm_hour][UPLOAD], octets, ipTable[dstIPIdx].hflow[tm->tm_hour][UPLOAD] + octets);
+		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[dstIPIdx].hflow[tmTime.tm_hour][UPLOAD], octets, ipTable[dstIPIdx].hflow[tmTime.tm_hour][UPLOAD] + octets);
 
 		ipTable[dstIPIdx].sin_addr.s_addr = record->dstaddr;
-		ipTable[dstIPIdx].hflow[tm->tm_hour][DOWNLOAD] += octets;
+		ipTable[dstIPIdx].hflow[tmTime.tm_hour][DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[SUM] += octets;
 	    }

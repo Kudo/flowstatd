@@ -28,7 +28,7 @@ static void SetSavePrefix(char *dir)
 
 static int LoadWhitelist(char *fname)
 {
-    int i = 0;
+    int i = 0, j;
     FILE *fp;
     char buf[20];
     in_addr_t addr;
@@ -43,9 +43,14 @@ static int LoadWhitelist(char *fname)
 
     while (i < MAX_WHITELIST && ((fgets(buf, 19, fp)) != NULL))
     {
-	// different netmask
-	if ((addr = inet_addr(buf)) != INADDR_NONE && ((addr & NETMASK) == IP_PREFIX))
-	    whitelist[i++] = addr;
+	if ((addr = inet_addr(buf)) == INADDR_NONE)
+	    continue;
+	
+	for (j = 0; j < (int) nSubnet; ++j)
+	{
+	    if ((addr & rcvNetList[j].mask) == rcvNetList[j].net)
+		whitelist[i++] = addr;
+	}
     }
 
     fclose(fp);
@@ -61,35 +66,35 @@ void ExportRecord(int mode)
     char buf[100];
 
     if (mode == TODAY)
+    {
 	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
-		localtm->tm_year + 1900, localtm->tm_mon + 1, localtm->tm_mday);
+		localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
+    }
     else
     {
-	struct tm *newtm;
+	struct tm newtm;
 	time_t yesterday;
 
 	yesterday = time(NULL) - 86400;
-	newtm = localtime(&yesterday);
+	localtime_r(&yesterday, &newtm);
 
 	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
-		newtm->tm_year + 1900, newtm->tm_mon + 1, newtm->tm_mday);
+		newtm.tm_year + 1900, newtm.tm_mon + 1, newtm.tm_mday);
     }
 
     if ((fp = fopen(buf, "w")) == NULL)
 	Diep("fopen in ExportRecord() error");
 
 
-    for (i = 0; i < IP_NUM; i++)
+    for (i = 0; i < (int) sumIpCount; i++)
     {
-	/*
-	inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), buf, 16);
+	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), buf, 16);
 	fprintf(fp, "%d\t%s\t", i, buf);
 
 	for (j = 0; j < 24; j++)
-	    fprintf(fp, "%llu\t%llu\t", hash_table[i].hflow[j][0], hash_table[i].hflow[j][1]);
+	    fprintf(fp, "%llu\t%llu\t", ipTable[i].hflow[j][0], ipTable[i].hflow[j][1]);
 
-	fprintf(fp, "%llu\t%llu\t%llu\n", hash_table[i].nflow[0], hash_table[i].nflow[1], hash_table[i].nflow[2]);
-	*/
+	fprintf(fp, "%llu\t%llu\t%llu\n", ipTable[i].nflow[0], ipTable[i].nflow[1], ipTable[i].nflow[2]);
     }
 
     fclose(fp);
@@ -98,7 +103,7 @@ void ExportRecord(int mode)
 
 int ImportRecord(char *fname)
 {
-    int i, j;
+    int i;
     int num;
     FILE *fp;
     char buf[17];
@@ -109,7 +114,7 @@ int ImportRecord(char *fname)
     if ((fp = fopen(fname, "r")) == NULL)
 	Diep("fopen in ImportRecord() error");
 
-    for (i = 0; i < IP_NUM; i++)
+    //for (i = 0; i < IP_NUM; i++)
     {
 	/*
 	inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), buf, 16);
@@ -134,12 +139,15 @@ int ImportRecord(char *fname)
     return 1;
 }
 
-static void Update()
+static void Update(int s)
 {
     LoadWhitelist(whitelistFile);
 
     if (fork() == 0)
     {
+	time_t now = time(NULL);
+	localtime_r(&now, &localtm);
+
 	ExportRecord(TODAY);
 	exit(EXIT_SUCCESS);
     }
@@ -151,7 +159,7 @@ static void Usage(char *progName)
     exit(EXIT_SUCCESS);
 }
 
-static int LoadConfig(char *fname)
+static int LoadSubnet(char *fname)
 {
     FILE *fp;
     char buf[100];
@@ -160,9 +168,8 @@ static int LoadConfig(char *fname)
     in_addr_t addr;
     int maskBits;
 
-
     if ((fp = fopen(fname, "r")) == NULL)
-	Diep("fopen in LoadConfig() error");
+	Diep("fopen in LoadSubnet() error");
 
     while (fgets(buf, 99, fp) && nSubnet < MAX_SUBNET)
     {
@@ -177,13 +184,12 @@ static int LoadConfig(char *fname)
 	    continue;
 
 	rcvNetList[nSubnet].net = addr;
-	rcvNetList[nSubnet].mask = ~0 << (32 - maskBits);
+	rcvNetList[nSubnet].mask = 0xffffffff << (32 - maskBits);
 	rcvNetList[nSubnet].maskBits = (uchar) maskBits;
 	rcvNetList[nSubnet].ipCount = (rcvNetList[nSubnet].mask ^ 0xffffffff) + 1;
 	sumIpCount += rcvNetList[nSubnet].ipCount;
 	rcvNetList[nSubnet].mask = htonl(rcvNetList[nSubnet].mask);
 
-	printf("%u: %08x\t%08x\t%u\n", nSubnet, rcvNetList[nSubnet].net, rcvNetList[nSubnet].mask, rcvNetList[nSubnet].ipCount);
 	++nSubnet;
     }
 
@@ -198,23 +204,6 @@ static int RcvNetListCmp(const void *a, const void *b)
     struct subnet *tmpB = (struct subnet *) b;
 
     return (int) tmpA->net - tmpB->net;
-}
-
-static int MapTable()
-{
-    int i;
-    uint n = 0;
-
-    qsort(rcvNetList, nSubnet, sizeof(struct subnet), RcvNetListCmp);
-
-    /*
-    for (i = 0; i < nSubnet; ++i)
-    {
-	ipTable[n++] = 
-    }
-    */
-
-    return 1;
 }
 
 void Warn(const char *msg)
@@ -304,7 +293,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    nSubnet = LoadConfig(subnetFile);
+    nSubnet = LoadSubnet(subnetFile);
     LoadWhitelist(whitelistFile);
 
     ipTable = (struct hostflow *) malloc(sizeof(struct hostflow) * sumIpCount);
@@ -315,12 +304,12 @@ int main(int argc, char *argv[])
     }
     memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
 
-    MapTable();
+    // Sort rcvNetList for binary search
+    qsort(rcvNetList, nSubnet, sizeof(struct subnet), RcvNetListCmp);
 
-    exit(0);
     now = time(NULL);
-    localtm = localtime(&now);
-    preHour = localtm->tm_hour;
+    localtime_r(&now, &localtm);
+    preHour = localtm.tm_hour;
 
     signal(SIGCHLD, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
@@ -329,7 +318,7 @@ int main(int argc, char *argv[])
     signal(SIGHUP, &Update);
 
     snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
-	    localtm->tm_year + 1900, localtm->tm_mon + 1, localtm->tm_mday);
+	    localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
 
     ImportRecord(buf);
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -360,7 +349,7 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	    }
 
-	    if (evlist[i].ident == netflowSockFd)
+	    if (evlist[i].ident == (uint) netflowSockFd)
 	    {
 		memset(buf, 0, BUFSIZE);
 		if ((n = recvfrom(netflowSockFd, buf, BUFSIZE, 0, (struct sockaddr *) &pin, &plen)) == -1)
@@ -370,21 +359,21 @@ int main(int argc, char *argv[])
 		}
 
 		now = time(NULL);
-		localtm = localtime(&now);
+		localtime_r(&now, &localtm);
 
-		if (preHour == 23 && localtm->tm_hour == 0)
+		if (preHour == 23 && localtm.tm_hour == 0)
 		{
 		    ExportRecord(YESTERDAY);
 		    memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
-		    preHour = localtm->tm_hour;
+		    preHour = localtm.tm_hour;
 		}
 		else
-		    preHour = localtm->tm_hour;
+		    preHour = localtm.tm_hour;
 
 		if ((ch = isValidNFP(buf, n)) > 0)
-		    PushRecord(buf, ch);
+		    InsertFlowEntry(buf, ch);
 	    }
-	    else if (evlist[i].ident == flowdSockFd)
+	    else if (evlist[i].ident == (uint) flowdSockFd)
 	    {
 		if ((peerFd = accept(flowdSockFd, (struct sockaddr *) &pin, &plen)) == -1)
 		{
