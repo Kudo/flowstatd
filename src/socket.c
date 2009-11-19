@@ -40,6 +40,7 @@ int BuildTCPSock(in_addr_t listen_ipaddr, uint16_t listen_port)
 {
     int sockfd;
     struct sockaddr_in sin;
+    int optVal = 1;
 
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	Diep("socket() error");
@@ -48,6 +49,9 @@ int BuildTCPSock(in_addr_t listen_ipaddr, uint16_t listen_port)
     sin.sin_family = AF_INET;
     sin.sin_addr.s_addr = listen_ipaddr;
     sin.sin_port = listen_port;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optVal, sizeof(optVal)) == -1)
+	Diep("setsockopt() error");
 
     if (bind(sockfd, (struct sockaddr *) &sin, sizeof(sin)) == -1)
 	Diep("bind() error");
