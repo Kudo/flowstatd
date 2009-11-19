@@ -61,8 +61,8 @@ static int LoadWhitelist(char *fname)
 
 void ExportRecord(int mode)
 {
-    int i, j;
     FILE *fp;
+    uint tmpVal;
     char buf[100];
 
     if (mode == TODAY)
@@ -82,20 +82,18 @@ void ExportRecord(int mode)
 		newtm.tm_year + 1900, newtm.tm_mon + 1, newtm.tm_mday);
     }
 
-    if ((fp = fopen(buf, "w")) == NULL)
+    if ((fp = fopen(buf, "wb")) == NULL)
 	Diep("fopen in ExportRecord() error");
 
 
-    for (i = 0; i < (int) sumIpCount; i++)
-    {
-	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), buf, 16);
-	fprintf(fp, "%d\t%s\t", i, buf);
-
-	for (j = 0; j < 24; j++)
-	    fprintf(fp, "%llu\t%llu\t", ipTable[i].hflow[j][0], ipTable[i].hflow[j][1]);
-
-	fprintf(fp, "%llu\t%llu\t%llu\n", ipTable[i].nflow[0], ipTable[i].nflow[1], ipTable[i].nflow[2]);
-    }
+    tmpVal = sizeof(struct subnet);
+    fwrite(&tmpVal, sizeof(tmpVal), 1, fp);
+    fwrite(&nSubnet, sizeof(nSubnet), 1, fp);
+    tmpVal = sizeof(struct hostflow);
+    fwrite(&tmpVal, sizeof(tmpVal), 1, fp);
+    fwrite(&sumIpCount, sizeof(sumIpCount), 1, fp);
+    fwrite(rcvNetList, sizeof(struct subnet), nSubnet, fp);
+    fwrite(ipTable, sizeof(struct hostflow), sumIpCount, fp);
 
     fclose(fp);
 }
@@ -103,37 +101,41 @@ void ExportRecord(int mode)
 
 int ImportRecord(char *fname)
 {
-    int i;
-    int num;
+    uint tmpVal;
     FILE *fp;
-    char buf[17];
 
     if (access(fname, R_OK) == -1)
 	return 0;
 
-    if ((fp = fopen(fname, "r")) == NULL)
+    if ((fp = fopen(fname, "rb")) == NULL)
 	Diep("fopen in ImportRecord() error");
 
-    //for (i = 0; i < IP_NUM; i++)
+    fread(&tmpVal, sizeof(tmpVal), 1, fp);
+    fread(&tmpVal, sizeof(nSubnet), 1, fp);
+
+    if (tmpVal > MAX_SUBNET)
+	Diep("subnet count in flow data exceeds the maximum value");
+    else
+	nSubnet = tmpVal;
+
+    fread(&tmpVal, sizeof(tmpVal), 1, fp);
+    fread(&tmpVal, sizeof(sumIpCount), 1, fp);
+
+    if (tmpVal > sumIpCount)
     {
-	/*
-	inet_ntop(PF_INET, (void *) &(hash_table[i].sin_addr), buf, 16);
-	fscanf(fp, "%d%s", &num, buf);
-
-	if (i != num)
+	void *ptr;
+	if ((ptr = realloc(ipTable, sizeof(struct hostflow) * tmpVal)) == NULL)
 	{
-	    Warn("Warn: ImportRecord() invalid format");
-	    continue;
+	    free(ipTable);
+	    fprintf(stderr, "Failed to reallocate memory %d bytes\n", sizeof(struct hostflow) * tmpVal);
+	    exit(EXIT_FAILURE);
 	}
-
-	hash_table[i].sin_addr.s_addr = inet_addr(buf);
-
-	for (j = 0; j < 24; j++)
-	    fscanf(fp, "%llu%llu", &(hash_table[i].hflow[j][0]), &(hash_table[i].hflow[j][1]));
-
-	fscanf(fp, "%llu%llu%llu", &(hash_table[i].nflow[0]), &(hash_table[i].nflow[1]), &(hash_table[i].nflow[2]));
-	*/
+	ipTable = ptr;
+	sumIpCount = tmpVal;
     }
+
+    fread(rcvNetList, sizeof(struct subnet), nSubnet, fp);
+    fread(ipTable, sizeof(struct hostflow), sumIpCount, fp);
 
     fclose(fp);
     return 1;

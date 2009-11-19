@@ -6,16 +6,45 @@ extern char savePrefix[100];
 static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode)
 {
     int i, j;
-    char *ptr;
+    int isInSubnet;
+    unsigned long currSumIp = 0;
     char buf[BUFSIZE];
     FILE *fp;
+    struct hostflow ipFlow;
+    unsigned long long int totalFlow = 0;
     in_addr_t ipaddr_in = inet_addr(ipaddr);
 
     snprintf(buf, BUFSIZE - 1,"%s/flowdata.%04d-%02d-%02d", savePrefix, year, month, day);
 
-    if ((fp = fopen(buf, "r")) == NULL)
+    if ((fp = fopen(buf, "rb")) == NULL)
     {
-	snprintf(buf, BUFSIZE - 1, "Open data file failed: %s\n", strerror(errno));
+	snprintf(buf, BUFSIZE - 1, "No data\n");
+	SendBufToSock(peerFd, buf, strlen(buf));
+	return;
+    }
+
+    fread(&isInSubnet, sizeof(isInSubnet), 1, fp);
+    fread(&nSubnet, sizeof(nSubnet), 1, fp);
+    fread(&isInSubnet, sizeof(isInSubnet), 1, fp);
+    fread(&sumIpCount, sizeof(sumIpCount), 1, fp);
+    fread(rcvNetList, sizeof(struct subnet), nSubnet, fp);
+
+    isInSubnet = -1;
+    for (i = 0; i < nSubnet; ++i)
+    {
+	if ((ipaddr_in & rcvNetList[i].mask) == rcvNetList[i].net)
+	{
+	    isInSubnet = i;
+	    currSumIp += (ipaddr_in & ~rcvNetList[i].mask) >> rcvNetList[i].maskBits;
+	    break;
+	}
+	else 
+	    currSumIp += rcvNetList[i].ipCount;
+    }
+
+    if (isInSubnet < 0)
+    {
+	snprintf(buf, BUFSIZE - 1, "No data\n");
 	SendBufToSock(peerFd, buf, strlen(buf));
 	return;
     }
@@ -27,14 +56,14 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	    if (ipaddr_in == whitelist[j])
 	    {
 		snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, (double) 0);
-		strcat(buf, "--------------------------------------------------------\n");
-		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
-		strcat(buf, "--------------------------------------------------------\n");
+		strcat(buf, "-----------------------------------------------------------------------\n");
+		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
+		strcat(buf, "-----------------------------------------------------------------------\n");
 		SendBufToSock(peerFd, buf, strlen(buf));
 
 		for (i = 0; i < 24; i++)
 		{
-		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
+		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0, (double) 0);
 		    SendBufToSock(peerFd, buf, strlen(buf));
 		}
 		return;
@@ -42,58 +71,30 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	}
     }
 
-    while (fgets(buf, BUFSIZE - 1, fp))
+    fseek(fp, sizeof(struct hostflow) * currSumIp, SEEK_CUR);
+    fread(&ipFlow, sizeof(struct hostflow), 1, fp);
+
+    snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, 
+	    ((double) ipFlow.nflow[SUM]) / MBYTES);
+    strcat(buf, "-----------------------------------------------------------------------\n");
+    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
+    strcat(buf, "-----------------------------------------------------------------------\n");
+
+    SendBufToSock(peerFd, buf, strlen(buf));
+
+    for (i = 0; i < 24; i++)
     {
-	/* Num */
-	if ((ptr = strtok(buf, " \n\t\r")) == NULL)
-	    continue;
-
-	/* IP */
-	if (((ptr = strtok(NULL, " \n\t\r")) != NULL) && (strcmp(ptr, ipaddr) == 0))
-	{
-	    unsigned long long hflow[24][2];
-	    unsigned long long nflow[3];
-
-	    for (i = 0; i < 24; i++)
-	    {
-		ptr = strtok(NULL, " \n\t\r");
-		hflow[i][UPLOAD] = strtoull(ptr, (char **) NULL, 10);
-
-		ptr = strtok(NULL, " \n\t\r");
-		hflow[i][DOWNLOAD] = strtoull(ptr, (char **) NULL, 10);
-	    }
-
-	    ptr = strtok(NULL, " \n\t\r");
-	    nflow[UPLOAD] = strtoull(ptr, (char **) NULL, 10);
-
-	    ptr = strtok(NULL, " \n\t\r");
-	    nflow[DOWNLOAD] = strtoull(ptr, (char **) NULL, 10);
-
-	    ptr = strtok(NULL, " \n\t\r");
-	    nflow[SUM] = strtoull(ptr, (char **) NULL, 10);
-
-	    snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, 
-		    ((double) nflow[SUM]) / MBYTES);
-	    strcat(buf, "--------------------------------------------------------\n");
-	    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
-	    strcat(buf, "--------------------------------------------------------\n");
-	    SendBufToSock(peerFd, buf, strlen(buf));
-
-	    for (i = 0; i < 24; i++)
-	    {
-		snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
-			((double) (hflow[i][UPLOAD])) / MBYTES,
-			((double) (hflow[i][DOWNLOAD])) / MBYTES,
-			((double) (hflow[i][UPLOAD] + hflow[i][DOWNLOAD])) / MBYTES);
-		SendBufToSock(peerFd, buf, strlen(buf));
-	    }
-
-	    fclose(fp);
-	    return;
-	}
+	totalFlow += ipFlow.hflow[i][UPLOAD] + ipFlow.hflow[i][DOWNLOAD];
+	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
+		((double) (ipFlow.hflow[i][UPLOAD])) / MBYTES,
+		((double) (ipFlow.hflow[i][DOWNLOAD])) / MBYTES,
+		((double) (ipFlow.hflow[i][UPLOAD] + ipFlow.hflow[i][DOWNLOAD])) / MBYTES,
+		((double) (totalFlow)) / MBYTES);
+	SendBufToSock(peerFd, buf, strlen(buf));
     }
-    SendBufToSock(peerFd, "No data\n", 8);
+
     fclose(fp);
+    return;
 }
 
 static void GetByIP(char *ipaddr, char realmode)
@@ -104,6 +105,7 @@ static void GetByIP(char *ipaddr, char realmode)
     char buf[BUFSIZE];
     char time[20];
     char isOurNet = 0;
+    unsigned long long int totalFlow = 0;
 
     isOurNet = 0;
     for (i = 0; i < (int) nSubnet; ++i)
@@ -129,14 +131,14 @@ static void GetByIP(char *ipaddr, char realmode)
 	    {
 		strftime(time, 19, "%F %T", &localtm);
 		snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time, (double) 0);
-		strcat(buf, "--------------------------------------------------------\n");
-		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
-		strcat(buf, "--------------------------------------------------------\n");
+		strcat(buf, "-----------------------------------------------------------------------\n");
+		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
+		strcat(buf, "-----------------------------------------------------------------------\n");
 		SendBufToSock(peerFd, buf, strlen(buf));
 
 		for (i = 0; i < 24; i++)
 		{
-		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0);
+		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0, (double) 0);
 		    SendBufToSock(peerFd, buf, strlen(buf));
 		}
 
@@ -150,23 +152,34 @@ static void GetByIP(char *ipaddr, char realmode)
     strftime(time, 19, "%F %T", &localtm);
     snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time,
 	    ((double) ipTable[ipIdx].nflow[SUM]) / MBYTES);
-    strcat(buf, "--------------------------------------------------------\n");
-    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
-    strcat(buf, "--------------------------------------------------------\n");
+    strcat(buf, "-----------------------------------------------------------------------\n");
+    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
+    strcat(buf, "-----------------------------------------------------------------------\n");
     SendBufToSock(peerFd, buf, strlen(buf));
     for (i = 0; i < 24; i++)
     {
-	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
+	totalFlow += ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD];
+
+	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
 		((double) (ipTable[ipIdx].hflow[i][UPLOAD])) / MBYTES,
 		((double) (ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES,
-		((double) (ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES);
+		((double) (ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES,
+		((double) (totalFlow)) / MBYTES);
 	SendBufToSock(peerFd, buf, strlen(buf));
     }
 }
 
 static int HostFlowCmp(const void *a, const void *b)
 {
-    return (int) (((struct hostflow *) b)->nflow[SUM] - ((struct hostflow *) a)->nflow[SUM]);
+    register struct hostflow *recA = (struct hostflow *) a;
+    register struct hostflow *recB = (struct hostflow *) b;
+
+    if (recB->nflow[SUM] > recA->nflow[SUM])
+	return 1;
+    else if (recB->nflow[SUM] == recA->nflow[SUM])
+	return 0;
+    else
+	return -1;
 }
 
 static void GetByFlow(uint overMB, char realmode)
@@ -233,9 +246,6 @@ static void GetOldByFlow(int year, int month, int day, uint overMB, char realmod
 	SendBufToSock(peerFd, "No data\n", 8);
 	return;
     }
-
-    memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
-    ImportRecord(buf);
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
@@ -334,8 +344,6 @@ static void GetOldByTopN(int year, int month, int day, uint topN, char realmode)
 	SendBufToSock(peerFd, "No data\n", 8);
 	return;
     }
-
-    memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
