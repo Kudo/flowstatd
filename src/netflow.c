@@ -109,25 +109,25 @@ void InsertFlowEntry(char *buf, int recCount)
 
 	if (srcIPIdx >= 0 && dstIPIdx == RET_NOT_IN_MYNET)
 	{
-	    //	if (tmTime.tm_hour == localtm.tm_hour)
+	    if (tmTime.tm_mday == localtm.tm_mday)
 	    {
+		displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 		ipTable[srcIPIdx].sin_addr.s_addr = record->srcaddr;
 		ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[SUM] += octets;
 	    }
-	    displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 	}
 	else if (dstIPIdx >= 0 && srcIPIdx == RET_NOT_IN_MYNET)
 	{
-	    //	if (tmTime.tm_hour == localtm.tm_hour)
+	    if (tmTime.tm_mday == localtm.tm_mday)
 	    {
+		displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 		ipTable[dstIPIdx].sin_addr.s_addr = record->dstaddr;
 		ipTable[dstIPIdx].hflow[tmTime.tm_hour][DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[SUM] += octets;
 	    }
-	    displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 	}
     }
 }
