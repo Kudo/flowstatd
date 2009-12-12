@@ -110,6 +110,7 @@ extern int verbose;
 extern struct tm localtm;
 extern struct hostflow *ipTable;
 extern struct hostflow *hashTable;
+extern struct subnet myNet;
 extern struct subnet rcvNetList[MAX_SUBNET];
 extern in_addr_t whitelist[MAX_WHITELIST];
 extern uint nSubnet;

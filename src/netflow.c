@@ -1,5 +1,8 @@
 #include "flowd.h"
 
+#define	RET_IN_MYNET	    -1
+#define RET_NOT_IN_MYNET	    -2
+
 inline int getIPIdx(in_addr_t ipaddr)
 {
     uchar isHit = 0;
@@ -31,7 +34,10 @@ inline int getIPIdx(in_addr_t ipaddr)
     if (isHit > 0)
 	return idx;
 
-    return -1;
+    if (myNet.net != 0 && myNet.net == (ipaddr & myNet.mask))
+	return RET_IN_MYNET;
+
+    return RET_NOT_IN_MYNET;
 }
 
 int isValidNFP(const char *buf, int len)
@@ -101,11 +107,7 @@ void InsertFlowEntry(char *buf, int recCount)
 	srcIPIdx = getIPIdx(record->srcaddr);
 	dstIPIdx = getIPIdx(record->dstaddr);
 
-#if 1
-	if (srcIPIdx >= 0 && dstIPIdx == -1)
-#else
-	if (srcIPIdx >= 0)
-#endif
+	if (srcIPIdx >= 0 && dstIPIdx == RET_NOT_IN_MYNET)
 	{
 	    //	if (tmTime.tm_hour == localtm.tm_hour)
 	    {
@@ -117,11 +119,7 @@ void InsertFlowEntry(char *buf, int recCount)
 		ipTable[srcIPIdx].nflow[SUM] += octets;
 	    }
 	}
-#if 1
-	else if (dstIPIdx >= 0 && srcIPIdx == -1)
-#else
-	else if (dstIPIdx >= 0)
-#endif
+	else if (dstIPIdx >= 0 && srcIPIdx == RET_NOT_IN_MYNET)
 	{
 
 	    //	if (tmTime.tm_hour == localtm.tm_hour)

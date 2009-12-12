@@ -170,11 +170,39 @@ static int LoadSubnet(char *fname)
     in_addr_t addr;
     int maskBits;
 
+    memset(&myNet, 0, sizeof(struct subnet));
+
     if ((fp = fopen(fname, "r")) == NULL)
 	Diep("fopen in LoadSubnet() error");
 
     while (fgets(buf, 99, fp) && nSubnet < MAX_SUBNET)
     {
+	if (buf[0] == '#' || buf[0] == '\n')	// Skip mark and empty line
+	    continue;
+
+	if (strncmp(buf, "MyNetwork=", 10) == 0)    // My Network
+	{
+	    char *ptr = buf + 10;
+
+	    if ((ipPtr = strtok(ptr, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL)
+		continue;
+
+	    if ((addr = inet_addr(ipPtr)) == INADDR_NONE)
+		continue;
+
+	    maskBits = (uint) strtoul(maskPtr, (char **) NULL, 10);
+	    if (maskBits < 1 && maskBits > 32)
+		continue;
+
+	    myNet.net = addr;
+	    myNet.mask = 0xffffffff << (32 - maskBits);
+	    myNet.maskBits = (uchar) maskBits;
+	    myNet.ipCount = (myNet.mask ^ 0xffffffff) + 1;
+	    myNet.mask = htonl(myNet.mask);
+
+	    continue;
+	}
+
 	if ((ipPtr = strtok(buf, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL)
 	    continue;
 
