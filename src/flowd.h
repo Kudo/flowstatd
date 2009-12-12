@@ -107,6 +107,7 @@ struct NF_record {
  * Global variables
  */
 extern int verbose;
+extern int debug;
 extern struct tm localtm;
 extern struct hostflow *ipTable;
 extern struct hostflow *hashTable;

@@ -4,6 +4,7 @@
  * Global variables
  */
 int verbose;
+int debug;
 struct tm localtm;
 struct hostflow *ipTable;
 struct hostflow *hashTable;

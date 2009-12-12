@@ -64,6 +64,23 @@ int isValidNFP(const char *buf, int len)
     return recCount;
 }
 
+static inline void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
+{
+    if (debug)
+    {
+	char src_ip[17];
+	char dst_ip[17];
+	struct in_addr src_addr, dst_addr;
+
+	src_addr.s_addr = srcaddr;
+	dst_addr.s_addr = dstaddr;
+	inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
+	inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
+
+	printf("%-17.17s -> %-17.17s Octets: %u\n", src_ip, dst_ip, ntohl(octets));
+    }
+}
+
 void InsertFlowEntry(char *buf, int recCount)
 {
     int i;
@@ -83,23 +100,6 @@ void InsertFlowEntry(char *buf, int recCount)
 	ptr += NF_RECORD_SIZE;
 	record = (struct NF_record *) ptr;
 
-	if (verbose)
-	{
-	    char src_ip[17];
-	    char dst_ip[17];
-	    struct in_addr src_addr, dst_addr;
-
-	    src_addr.s_addr = record->srcaddr;
-	    dst_addr.s_addr = record->dstaddr;
-	    inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
-	    inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
-
-	    //if (strcmp(src_ip, "140.123.238.189") == 0 || strcmp(dst_ip, "140.123.238.189") == 0)
-	    //if (strcmp(src_ip, "140.123.238.189") == 0)
-	    //if (strcmp(dst_ip, "140.123.238.189") == 0)
-	    printf("SrcIP: %-17.17s DstIP: %-17.17s Octets: %u\n", src_ip, dst_ip, ntohl(record->dOctets));
-	}
-
 	ftt = ftltime(ntohl(header->SysUptime), ntohl(header->unix_secs), ntohl(header->unix_nsecs), ntohl(record->First));
 	localtime_r((time_t *) &ftt.secs, &tmTime);
 	octets = ntohl(record->dOctets);
@@ -111,27 +111,23 @@ void InsertFlowEntry(char *buf, int recCount)
 	{
 	    //	if (tmTime.tm_hour == localtm.tm_hour)
 	    {
-		//	  if (record->srcaddr == inet_addr("140.123.238.189"))
-		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD], octets, ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] + octets);
 		ipTable[srcIPIdx].sin_addr.s_addr = record->srcaddr;
 		ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[UPLOAD] += octets;
 		ipTable[srcIPIdx].nflow[SUM] += octets;
 	    }
+	    displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 	}
 	else if (dstIPIdx >= 0 && srcIPIdx == RET_NOT_IN_MYNET)
 	{
-
 	    //	if (tmTime.tm_hour == localtm.tm_hour)
 	    {
-		//	  if (record->dstaddr == inet_addr("140.123.238.189"))
-		//	    printf("Before: %llu Octets: %u After: %llu\n", ipTable[dstIPIdx].hflow[tmTime.tm_hour][UPLOAD], octets, ipTable[dstIPIdx].hflow[tmTime.tm_hour][UPLOAD] + octets);
-
 		ipTable[dstIPIdx].sin_addr.s_addr = record->dstaddr;
 		ipTable[dstIPIdx].hflow[tmTime.tm_hour][DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[DOWNLOAD] += octets;
 		ipTable[dstIPIdx].nflow[SUM] += octets;
 	    }
+	    displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
 	}
     }
 }

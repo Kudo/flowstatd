@@ -267,6 +267,7 @@ int main(int argc, char *argv[])
     struct kevent evlist[2];
 
     verbose = 0;
+    debug = 0;
     sumIpCount = 0;
     strncpy(savePrefix, DEF_SAVE_PREFIX, 99);
     strncpy(subnetFile, DEF_SUBNET_FILE, 99);
@@ -276,7 +277,7 @@ int main(int argc, char *argv[])
     netflowBindPort = htons(NETFLOW_LISTEN_PORT);
     flowdBindPort = htons(FLOWD_LISTEN_PORT);
 
-    while ((ch = getopt(argc, argv, "i:p:P:s:vw:")) != -1)
+    while ((ch = getopt(argc, argv, "i:p:P:s:vdw:")) != -1)
     {
 	switch ((char) ch)
 	{
@@ -306,6 +307,10 @@ int main(int argc, char *argv[])
 
 	    case 'v':		/* Verbose mode */
 		verbose = 1;
+		break;
+
+	    case 'd':		/* Debug mode */
+		debug = 1;
 		break;
 
 	    case 'w':
