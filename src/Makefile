@@ -8,6 +8,7 @@ CC	= gcc
 CPROTO	= cproto
 #CFLAGS	= -O2 -Wall
 CFLAGS	= -g -Wall
+LIB	= -lz
 SRC	= command.c netflow.c flowd.c fttime.c socket.c global.c
 OBJ	= $(SRC:.c=.o)
 
@@ -20,7 +21,7 @@ OBJ	= $(SRC:.c=.o)
 all:	flowd
 
 flowd:	$(OBJ)
-	$(CC) $(CFLAGS) -o ../bin/$@ $?
+	$(CC) $(CFLAGS) $(LIB) -o ../bin/$@ $?
 
 flowd.p: $(SRC)
 	$(CPROTO) -o $@ $(SRC)

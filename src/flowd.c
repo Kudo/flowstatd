@@ -61,13 +61,13 @@ static int LoadWhitelist(char *fname)
 
 void ExportRecord(int mode)
 {
-    FILE *fp;
+    gzFile fpZip;
     uint tmpVal;
     char buf[100];
 
     if (mode == TODAY)
     {
-	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
+	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
 		localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
     }
     else
@@ -78,48 +78,48 @@ void ExportRecord(int mode)
 	yesterday = time(NULL) - 86400;
 	localtime_r(&yesterday, &newtm);
 
-	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
+	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
 		newtm.tm_year + 1900, newtm.tm_mon + 1, newtm.tm_mday);
     }
 
-    if ((fp = fopen(buf, "wb")) == NULL)
-	Diep("fopen in ExportRecord() error");
+    if ((fpZip = gzopen(buf, "wb")) == NULL)
+	Diep("gzopen in ExportRecord() error");
 
 
     tmpVal = sizeof(struct subnet);
-    fwrite(&tmpVal, sizeof(tmpVal), 1, fp);
-    fwrite(&nSubnet, sizeof(nSubnet), 1, fp);
+    gzwrite(fpZip, &tmpVal, sizeof(tmpVal));
+    gzwrite(fpZip, &nSubnet, sizeof(nSubnet));
     tmpVal = sizeof(struct hostflow);
-    fwrite(&tmpVal, sizeof(tmpVal), 1, fp);
-    fwrite(&sumIpCount, sizeof(sumIpCount), 1, fp);
-    fwrite(rcvNetList, sizeof(struct subnet), nSubnet, fp);
-    fwrite(ipTable, sizeof(struct hostflow), sumIpCount, fp);
+    gzwrite(fpZip, &tmpVal, sizeof(tmpVal));
+    gzwrite(fpZip, &sumIpCount, sizeof(sumIpCount));
+    gzwrite(fpZip, rcvNetList, sizeof(struct subnet) * nSubnet);
+    gzwrite(fpZip, ipTable, sizeof(struct hostflow) * sumIpCount);
 
-    fclose(fp);
+    gzclose(fpZip);
 }
 
 
 int ImportRecord(char *fname)
 {
     uint tmpVal;
-    FILE *fp;
+    gzFile fpZip;
 
     if (access(fname, R_OK) == -1)
 	return 0;
 
-    if ((fp = fopen(fname, "rb")) == NULL)
-	Diep("fopen in ImportRecord() error");
+    if ((fpZip = gzopen(fname, "rb")) == NULL)
+	Diep("gzopen in ImportRecord() error");
 
-    fread(&tmpVal, sizeof(tmpVal), 1, fp);
-    fread(&tmpVal, sizeof(nSubnet), 1, fp);
+    gzread(fpZip, &tmpVal, sizeof(tmpVal));
+    gzread(fpZip, &tmpVal, sizeof(nSubnet));
 
     if (tmpVal > MAX_SUBNET)
 	Diep("subnet count in flow data exceeds the maximum value");
     else
 	nSubnet = tmpVal;
 
-    fread(&tmpVal, sizeof(tmpVal), 1, fp);
-    fread(&tmpVal, sizeof(sumIpCount), 1, fp);
+    gzread(fpZip, &tmpVal, sizeof(tmpVal));
+    gzread(fpZip, &tmpVal, sizeof(sumIpCount));
 
     if (tmpVal > sumIpCount)
     {
@@ -134,10 +134,10 @@ int ImportRecord(char *fname)
 	sumIpCount = tmpVal;
     }
 
-    fread(rcvNetList, sizeof(struct subnet), nSubnet, fp);
-    fread(ipTable, sizeof(struct hostflow), sumIpCount, fp);
+    gzread(fpZip, rcvNetList, sizeof(struct subnet) * nSubnet);
+    gzread(fpZip, ipTable, sizeof(struct hostflow) * sumIpCount);
 
-    fclose(fp);
+    gzclose(fpZip);
     return 1;
 }
 
@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
     signal(SIGTERM, &Exits);
     signal(SIGHUP, &Update);
 
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", savePrefix, 
+    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
 	    localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
 
     ImportRecord(buf);

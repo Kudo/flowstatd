@@ -13,6 +13,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <zlib.h>
 
 #include <sys/event.h>
 #include <sys/time.h>

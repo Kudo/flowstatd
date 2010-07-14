@@ -9,25 +9,25 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
     int isInSubnet;
     unsigned long currSumIp = 0;
     char buf[BUFSIZE];
-    FILE *fp;
+    gzFile fpZip;
     struct hostflow ipFlow;
     unsigned long long int totalFlow = 0;
     in_addr_t ipaddr_in = inet_addr(ipaddr);
 
-    snprintf(buf, BUFSIZE - 1,"%s/flowdata.%04d-%02d-%02d", savePrefix, year, month, day);
+    snprintf(buf, BUFSIZE - 1,"%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
 
-    if ((fp = fopen(buf, "rb")) == NULL)
+    if ((fpZip = gzopen(buf, "rb")) == NULL)
     {
 	snprintf(buf, BUFSIZE - 1, "No data\n");
 	SendBufToSock(peerFd, buf, strlen(buf));
 	return;
     }
 
-    fread(&isInSubnet, sizeof(isInSubnet), 1, fp);
-    fread(&nSubnet, sizeof(nSubnet), 1, fp);
-    fread(&isInSubnet, sizeof(isInSubnet), 1, fp);
-    fread(&sumIpCount, sizeof(sumIpCount), 1, fp);
-    fread(rcvNetList, sizeof(struct subnet), nSubnet, fp);
+    gzread(fpZip, &isInSubnet, sizeof(isInSubnet));
+    gzread(fpZip, &nSubnet, sizeof(nSubnet));
+    gzread(fpZip, &isInSubnet, sizeof(isInSubnet));
+    gzread(fpZip, &sumIpCount, sizeof(sumIpCount));
+    gzread(fpZip, rcvNetList, sizeof(struct subnet) * nSubnet);
 
     isInSubnet = -1;
     for (i = 0; i < nSubnet; ++i)
@@ -71,8 +71,8 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	}
     }
 
-    fseek(fp, sizeof(struct hostflow) * currSumIp, SEEK_CUR);
-    fread(&ipFlow, sizeof(struct hostflow), 1, fp);
+    gzseek(fpZip, sizeof(struct hostflow) * currSumIp, SEEK_CUR);
+    gzread(fpZip, &ipFlow, sizeof(struct hostflow));
 
     snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, 
 	    ((double) ipFlow.nflow[SUM]) / MBYTES);
@@ -93,7 +93,7 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	SendBufToSock(peerFd, buf, strlen(buf));
     }
 
-    fclose(fp);
+    gzclose(fpZip);
     return;
 }
 
@@ -239,7 +239,7 @@ static void GetOldByFlow(int year, int month, int day, uint overMB, char realmod
     if (overMB <= 0)
 	return;
 
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", savePrefix, year, month, day);
+    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
 
     if (ImportRecord(buf) == 0)
     {
@@ -337,7 +337,7 @@ static void GetOldByTopN(int year, int month, int day, uint topN, char realmode)
     if (topN <= 0 || topN >= sumIpCount)
 	return;
 
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d", savePrefix, year, month, day);
+    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
 
     if (ImportRecord(buf) == 0)
     {
