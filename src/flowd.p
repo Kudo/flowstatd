@@ -21,6 +21,14 @@ int selectRemoveFromListImpl(MultiplexorFunc_t *this, int fd);
 int selectWaitImpl(MultiplexorFunc_t *this);
 MultiplexorFunc_t *selectNewMultiplexor(void);
 int selectFreeMultiplexor(MultiplexorFunc_t *this);
+MultiplexorFunc_t *kqueueNewMultiplexor(void);
+int kqueueFreeMultiplexor(MultiplexorFunc_t *this);
+int kqueueInitImpl(MultiplexorFunc_t *this);
+int kqueueUnInitImpl(MultiplexorFunc_t *this);
+int kqueueIsActiveImpl(MultiplexorFunc_t *this, int fd);
+int kqueueAddToListImpl(MultiplexorFunc_t *this, int fd);
+int kqueueRemoveFromListImpl(MultiplexorFunc_t *this, int fd);
+int kqueueWaitImpl(MultiplexorFunc_t *this);
 /* socket.c */
 void SendBufToSock(int sckfd, const char *buf, int len);
 int BuildUDPSock(in_addr_t listen_ipaddr, uint16_t listen_port);

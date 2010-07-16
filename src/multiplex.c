@@ -1,6 +1,7 @@
 #include "multiplex.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 int selectInitImpl(MultiplexorFunc_t *this)
 {
@@ -97,11 +98,11 @@ int kqueueUnInitImpl(MultiplexorFunc_t *this)
 
 int kqueueIsActiveImpl(MultiplexorFunc_t *this, int fd)
 {
-    // TODO
     kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    for (int i = 0; i < multiplexor->monitorFdCount; ++i)
+    register int i = 0;
+    for (i = 0; i < multiplexor->monitorFdCount; ++i)
     {
-	if (multiplexor->evlist[i].ident == (uint) fd)
+	if (multiplexor->evlist[i].ident == (uint) fd && !(multiplexor->evlist[i].flags & EV_ERROR))
 	    return 1;
     }
     return 0;
@@ -117,8 +118,9 @@ int kqueueAddToListImpl(MultiplexorFunc_t *this, int fd)
 
 int kqueueRemoveFromListImpl(MultiplexorFunc_t *this, int fd)
 {
-    // TODO
     kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
+    EV_SET(&multiplexor->chlist[multiplexor->monitorFdCount], fd, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, 0);
+    --multiplexor->monitorFdCount;
     return 0;
 }
 
@@ -126,9 +128,37 @@ int kqueueWaitImpl(MultiplexorFunc_t *this)
 {
     kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
     return kevent(multiplexor->kqFd, 
-	    multiplexor->chlist, multiplexor->monitorFdCount + 1, 
-	    multiplexor->evlist, multiplexor->monitorFdCount + 1,
+	    multiplexor->chlist, multiplexor->monitorFdCount, 
+	    multiplexor->evlist, multiplexor->monitorFdCount,
 	    NULL);
+}
+
+MultiplexorFunc_t *kqueueNewMultiplexor()
+{
+    kqueueMultiplexor_t *multiplexor = (kqueueMultiplexor_t *) malloc(sizeof(kqueueMultiplexor_t));
+    multiplexor->funcs.Init = kqueueInitImpl;
+    multiplexor->funcs.UnInit = kqueueUnInitImpl;
+    multiplexor->funcs.IsActive = kqueueIsActiveImpl;
+    multiplexor->funcs.AddToList = kqueueAddToListImpl;
+    multiplexor->funcs.RemoveFromList = kqueueRemoveFromListImpl;
+    multiplexor->funcs.Wait = kqueueWaitImpl;
+    return &(multiplexor->funcs);
+}
+
+int kqueueFreeMultiplexor(MultiplexorFunc_t *this)
+{
+    this->UnInit(this);
+    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
+    if (multiplexor != NULL)
+    {
+	free(multiplexor);
+	this = NULL;
+	return 1;
+    }
+    else
+    {
+	return 0;
+    }
 }
 
 #endif
