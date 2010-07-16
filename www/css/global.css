@@ -1,0 +1,142 @@
+* {
+    margin: 0;
+    padding: 0;
+    font: Verdana, Arial, Helvetica, sans-serif;
+}
+
+html,body {
+    text-align: center;
+}
+
+#wrapper {
+    padding: 1em;
+    background: #ffffff;
+    margin: 0 auto;
+    width: 900px;
+}
+
+#header {
+    text-align: left;
+    margin-bottom: 40px;
+    height: 60px;
+}
+
+#header h1 {
+    line-height: 60px;
+}
+
+#infoBar {
+    border-top: 1px solid #e78f08;
+    background: #fcdbb1;
+    text-align: right;
+    font-size: 14px;
+    padding: 3px 15px 0;
+
+}
+
+#timeBar {
+}
+
+#funcBar {
+    margin-left: 3em;
+}
+
+#sidebar {
+    float: left;
+}
+
+#content {
+    height: 100%;
+    min-height: 450px;
+}
+
+#footer {
+    clear: both;
+    text-align: left;
+    color: #ffffff;
+    background: #000000;
+}
+
+/* Generated via www.cssmenubuilder.com */
+
+#sidebar ul {
+    margin: 0;
+    padding: 0;
+    width: 250px;
+    list-style: none;
+    background: #ffffff;
+}
+
+#sidebar ul li {
+    margin: 0 0 1px 0;
+    height: 40px;
+    display: block;
+}
+
+#sidebar ul li a {
+    text-align: left;
+    height: 40px;
+    padding: 0px 25px;
+    font: 16px;
+    color: #ffffff;
+    display: block;
+    background: url('../images/verMenuImages.png') 0px 0px no-repeat;
+    text-decoration: none;
+}
+
+#sidebar ul li a:hover {
+    background: url('../images/verMenuImages.png') 0px -40px no-repeat;
+    color: #026890;
+}
+
+#sidebar ul li a.active, #sidebar ul li a.active:hover {
+    background: url('../images/verMenuImages.png') 0px -80px no-repeat;
+    color: #ffffff;
+}
+
+#sidebar ul li a span {
+    line-height: 40px;
+}
+
+#ipFlowTable {
+    float: left;
+    border-collapse: collapse;
+    margin-left: 2em;
+    border: 1px solid #666;
+}
+
+#ipFlowTable caption {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin: 1em 0 0;
+}
+
+#ipFlowTable thead {
+    background: #ccc url(../images/bar.gif) repeat-x left center;
+    border-top: 1px solid #a5a5a5;
+    border-bottom: 1px solid #a5a5a5;
+}
+
+#ipFlowTable th {
+    font-weight: normal;
+    text-align: left;
+}
+
+#ipFlowTable th, #ipFlowTable td {
+    padding: 0.1em 1em;
+}
+
+.odd {
+    background-color:#edf5ff;
+}
+
+#ipFlowTable tr:hover {
+    background-color:#3d80df;
+    color: #fff;
+}
+
+#ipFlowTable thead tr:hover {
+    background-color: transparent;
+    color: inherit;
+}
+
