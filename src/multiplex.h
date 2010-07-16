@@ -1,7 +1,7 @@
 #ifndef _MULTIPLEX_H
 #define _MULTIPLEX_H
 
-#define USE_KQUEUE	    // Only avaliable on FreeBSD or use select() in default
+#undef USE_KQUEUE	    // Only avaliable on FreeBSD or use select() in default
 
 #ifdef USE_KQUEUE
 #define MULTIPLEXOR_NAME    kqueue
