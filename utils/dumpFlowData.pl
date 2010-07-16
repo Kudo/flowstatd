@@ -15,7 +15,7 @@ sub main {
     my $buf;
     my $fh;
 
-    open($fh, '<', $ARGV[0]);
+    open($fh, "gzcat $ARGV[0] |");
     read($fh, $buf, 16);
     my ($rcvNetListSize, $nSubnet, $hostflowSize, $sumIpCount) = unpack('i4', $buf);
     my @rcvNetList;
