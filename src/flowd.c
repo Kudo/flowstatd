@@ -3,7 +3,7 @@
 int netflowSockFd;
 int flowdSockFd;
 int peerFd;
-int kq;
+MultiplexorFunc_t *multiplexor;
 
 char savePrefix[100];
 static char subnetFile[100];
@@ -263,8 +263,6 @@ int main(int argc, char *argv[])
     uint16_t flowdBindPort;
 
     int nev;
-    struct kevent chlist[2];
-    struct kevent evlist[2];
 
     verbose = 0;
     debug = 0;
@@ -361,30 +359,30 @@ int main(int argc, char *argv[])
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
     flowdSockFd = BuildTCPSock(bindIpAddr, flowdBindPort);
 
-    if ((kq = kqueue()) == -1)
-	Diep("kqueue() error");
-
-    EV_SET(&chlist[0], netflowSockFd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-    EV_SET(&chlist[1], flowdSockFd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+    multiplexor = NewMultiplexor(select);
+    if (multiplexor->Init(multiplexor) == 0)
+	Diep("Multiplexor Init() failed");
+    
+    multiplexor->AddToList(multiplexor, netflowSockFd);
+    multiplexor->AddToList(multiplexor, flowdSockFd);
 
     plen = sizeof(struct sockaddr_in);
 
     while (1)
     {
-	nev = kevent(kq, chlist, 2, evlist, 2, NULL);
-
-	if (nev < 0 && errno != EINTR)
-	    Diep("kevent() error");
+	nev = multiplexor->Wait(multiplexor);
 
 	for (i = 0; i < nev; i++) 
 	{
+#if 0
 	    if (evlist[i].flags & EV_ERROR) 
 	    {
 		fprintf(stderr, "kevent() EV_ERROR: %s\n", strerror(evlist[i].data));
 		exit(EXIT_FAILURE);
 	    }
+#endif
 
-	    if (evlist[i].ident == (uint) netflowSockFd)
+	    if (multiplexor->IsActive(multiplexor, netflowSockFd))
 	    {
 		memset(buf, 0, BUFSIZE);
 		if ((n = recvfrom(netflowSockFd, buf, BUFSIZE, 0, (struct sockaddr *) &pin, &plen)) == -1)
@@ -408,7 +406,7 @@ int main(int argc, char *argv[])
 		if ((ch = isValidNFP(buf, n)) > 0)
 		    InsertFlowEntry(buf, ch);
 	    }
-	    else if (evlist[i].ident == (uint) flowdSockFd)
+	    else if (multiplexor->IsActive(multiplexor, flowdSockFd))
 	    {
 		if ((peerFd = accept(flowdSockFd, (struct sockaddr *) &pin, &plen)) == -1)
 		{
@@ -430,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    close(kq);
+    FreeMultiplexor(select, multiplexor);
     close(netflowSockFd);
     close(flowdSockFd);
     free(ipTable);

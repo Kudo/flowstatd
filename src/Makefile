@@ -9,7 +9,7 @@ CPROTO	= cproto
 #CFLAGS	= -O2 -Wall
 CFLAGS	= -g -Wall
 LIB	= -lz
-SRC	= command.c netflow.c flowd.c fttime.c socket.c global.c
+SRC	= command.c netflow.c flowd.c fttime.c multiplex.c socket.c global.c
 OBJ	= $(SRC:.c=.o)
 
 .SUFFIXES: .o

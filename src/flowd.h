@@ -15,8 +15,8 @@
 #include <sys/stat.h>
 #include <zlib.h>
 
-#include <sys/event.h>
 #include <sys/time.h>
+#include "multiplex.h"
 
 //#define	MBYTES		1048576
 #define MBYTES		1000000
