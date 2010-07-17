@@ -2,12 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 int selectInitImpl(MultiplexorFunc_t *this)
 {
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    FD_ZERO(&multiplexor->rfdList);
+    multiplexor->maxFd = 0;
     multiplexor->monitorFdCount = 0;
+    memset(&multiplexor->fdList, 0, sizeof(multiplexor->fdList));
 
     return 1;
 }
@@ -27,23 +29,48 @@ int selectIsActiveImpl(MultiplexorFunc_t *this, int fd)
 int selectAddToListImpl(MultiplexorFunc_t *this, int fd)
 {
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    FD_SET(fd, &multiplexor->rfdList);
+    multiplexor->fdList[multiplexor->monitorFdCount] = fd;
     ++multiplexor->monitorFdCount;
+    if (multiplexor->maxFd < fd) multiplexor->maxFd = fd;
     return 1;
 }
 
 int selectRemoveFromListImpl(MultiplexorFunc_t *this, int fd)
 {
+    int newFdList[MAX_MONITOR_FD_COUNT];
+    int newMaxFd = 0;
+    int i, j;
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
+
+    for (i = 0, j = 0; i < MAX_MONITOR_FD_COUNT && j < MAX_MONITOR_FD_COUNT; ++i)
+    {
+	if (multiplexor->fdList[i] != fd)
+	    newFdList[j++] = multiplexor->fdList[i];
+    }
+
+    memcpy(&multiplexor->fdList, &newFdList, MAX_MONITOR_FD_COUNT);
+
     --multiplexor->monitorFdCount;
-    FD_CLR(fd, &multiplexor->rfdList);
+
+    for (i = 0; i < multiplexor->monitorFdCount; ++i)
+    {
+	if (newMaxFd < newFdList[i])
+	    newMaxFd = newFdList[i];
+    }
+    multiplexor->maxFd = newMaxFd;
     return 1;
 }
 
 int selectWaitImpl(MultiplexorFunc_t *this)
 {
+    int i;
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    return select(multiplexor->monitorFdCount + 1, &multiplexor->rfdList, NULL, NULL, NULL);
+
+    FD_ZERO(&multiplexor->rfdList);
+    for (i = 0; i < multiplexor->monitorFdCount; ++i)
+	FD_SET(multiplexor->fdList[i], &multiplexor->rfdList);
+
+    return select(multiplexor->maxFd + 1, &multiplexor->rfdList, NULL, NULL, NULL);
 }
 
 MultiplexorFunc_t *selectNewMultiplexor()

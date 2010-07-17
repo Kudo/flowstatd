@@ -1,6 +1,8 @@
 #ifndef _MULTIPLEX_H
 #define _MULTIPLEX_H
 
+#define MAX_MONITOR_FD_COUNT	    2
+
 #undef USE_KQUEUE	    // Only avaliable on FreeBSD or use select() in default
 
 #ifdef USE_KQUEUE
@@ -53,14 +55,12 @@ struct _MultiplexorFunc_t {
 };
 
 #ifdef USE_KQUEUE
-#define MAX_KQ_FD_COUNT	    2
-
 typedef struct _kqueueMultiplexor_t {
     MultiplexorFunc_t funcs;
 
     int kqFd;
-    struct kevent evlist[MAX_KQ_FD_COUNT];
-    struct kevent chlist[MAX_KQ_FD_COUNT];
+    struct kevent evlist[MAX_MONITOR_FD_COUNT];
+    struct kevent chlist[MAX_MONITOR_FD_COUNT];
     unsigned int monitorFdCount;
 } kqueueMultiplexor_t;
 
@@ -71,6 +71,8 @@ struct _selectMultiplexor_t {
     MultiplexorFunc_t funcs;
 
     fd_set rfdList;
+    int fdList[MAX_MONITOR_FD_COUNT];
+    unsigned int maxFd;
     unsigned int monitorFdCount;
 };
 
