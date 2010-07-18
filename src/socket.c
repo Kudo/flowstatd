@@ -67,7 +67,7 @@ void Exits(int s)
 {
     close(netflowSockFd);
     close(flowdSockFd);
-    FreeMultiplexer(select, multiplexer);
+    FreeMultiplexer(multiplexer);
     ExportRecord(TODAY);
     free(ipTable);
     exit(EXIT_SUCCESS);
@@ -78,7 +78,7 @@ void SockExit(int s)
     SendBufToSock(peerFd, "Timeout.\n", 9);
     close(netflowSockFd);
     close(flowdSockFd);
-    FreeMultiplexer(select, multiplexer);
+    FreeMultiplexer(multiplexer);
     free(ipTable);
     exit(EXIT_SUCCESS);
 }

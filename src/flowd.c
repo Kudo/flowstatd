@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
     flowdSockFd = BuildTCPSock(bindIpAddr, flowdBindPort);
 
-    multiplexer = NewMultiplexer(select);
+    multiplexer = NewMultiplexer();
     if (multiplexer->Init(multiplexer) == 0)
 	Diep("Multiplexer Init() failed");
     
@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    FreeMultiplexer(select, multiplexer);
+    FreeMultiplexer(multiplexer);
     close(netflowSockFd);
     close(flowdSockFd);
     free(ipTable);

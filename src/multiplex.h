@@ -6,13 +6,6 @@
 #undef USE_KQUEUE	    // Only avaliable on FreeBSD or use select() in default
 
 #ifdef USE_KQUEUE
-#define MULTIPLEXOR_NAME    kqueue
-#else
-#define MULTIPLEXOR_NAME    select
-#endif
-
-
-#ifdef USE_KQUEUE
 #include <sys/types.h>
 #include <sys/event.h>
 #include <sys/time.h>
@@ -40,8 +33,18 @@
         (type *)( (char *)__mptr - offsetof(type,member) );})
 
 
-#define NewMultiplexer(name, ...) name##NewMultiplexer(__VA_ARGS__)
-#define FreeMultiplexer(name, ...) name##FreeMultiplexer(__VA_ARGS__)
+#ifdef USE_KQUEUE
+
+#define NewMultiplexer(...) kqueueNewMultiplexer(__VA_ARGS__)
+#define FreeMultiplexer(...) kqueueFreeMultiplexer(__VA_ARGS__)
+
+#else
+
+#define NewMultiplexer(...) selectNewMultiplexer(__VA_ARGS__)
+#define FreeMultiplexer(...) selectFreeMultiplexer(__VA_ARGS__)
+
+#endif
+
 
 typedef struct _MultiplexerFunc_t MultiplexerFunc_t;
 struct _MultiplexerFunc_t {
