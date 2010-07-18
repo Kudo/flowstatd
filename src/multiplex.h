@@ -70,10 +70,9 @@ typedef struct _selectMultiplexor_t selectMultiplexor_t;
 struct _selectMultiplexor_t {
     MultiplexorFunc_t funcs;
 
-    fd_set rfdList;
-    int fdList[MAX_MONITOR_FD_COUNT];
+    fd_set evlist;
+    fd_set chlist;
     unsigned int maxFd;
-    unsigned int monitorFdCount;
 };
 
 

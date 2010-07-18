@@ -8,8 +8,8 @@ int selectInitImpl(MultiplexorFunc_t *this)
 {
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
     multiplexor->maxFd = 0;
-    multiplexor->monitorFdCount = 0;
-    memset(&multiplexor->fdList, 0, sizeof(multiplexor->fdList));
+    FD_ZERO(&multiplexor->evlist);
+    FD_ZERO(&multiplexor->chlist);
 
     return 1;
 }
@@ -23,54 +23,41 @@ int selectUnInitImpl(MultiplexorFunc_t *this)
 int selectIsActiveImpl(MultiplexorFunc_t *this, int fd)
 {
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    return FD_ISSET(fd, &multiplexor->rfdList);
+    return FD_ISSET(fd, &multiplexor->chlist);
 }
 
 int selectAddToListImpl(MultiplexorFunc_t *this, int fd)
 {
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    multiplexor->fdList[multiplexor->monitorFdCount] = fd;
-    ++multiplexor->monitorFdCount;
+    FD_SET(fd, &multiplexor->evlist);
     if (multiplexor->maxFd < fd) multiplexor->maxFd = fd;
     return 1;
 }
 
 int selectRemoveFromListImpl(MultiplexorFunc_t *this, int fd)
 {
-    int newFdList[MAX_MONITOR_FD_COUNT];
-    int newMaxFd = 0;
-    int i, j;
+    int i;
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
 
-    for (i = 0, j = 0; i < MAX_MONITOR_FD_COUNT && j < MAX_MONITOR_FD_COUNT; ++i)
+    FD_CLR(fd, &multiplexor->evlist);
+
+    for (i = multiplexor->maxFd - 1; i >= 0; --i)
     {
-	if (multiplexor->fdList[i] != fd)
-	    newFdList[j++] = multiplexor->fdList[i];
+	if (FD_ISSET(i, &multiplexor->evlist))
+	{
+	    multiplexor->maxFd = i;
+	    break;
+	}
     }
-
-    memcpy(&multiplexor->fdList, &newFdList, MAX_MONITOR_FD_COUNT);
-
-    --multiplexor->monitorFdCount;
-
-    for (i = 0; i < multiplexor->monitorFdCount; ++i)
-    {
-	if (newMaxFd < newFdList[i])
-	    newMaxFd = newFdList[i];
-    }
-    multiplexor->maxFd = newMaxFd;
     return 1;
 }
 
 int selectWaitImpl(MultiplexorFunc_t *this)
 {
-    int i;
     selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
 
-    FD_ZERO(&multiplexor->rfdList);
-    for (i = 0; i < multiplexor->monitorFdCount; ++i)
-	FD_SET(multiplexor->fdList[i], &multiplexor->rfdList);
-
-    return select(multiplexor->maxFd + 1, &multiplexor->rfdList, NULL, NULL, NULL);
+    memcpy(&multiplexor->chlist, &multiplexor->evlist, sizeof(fd_set));
+    return select(multiplexor->maxFd + 1, &multiplexor->chlist, NULL, NULL, NULL);
 }
 
 MultiplexorFunc_t *selectNewMultiplexor()
