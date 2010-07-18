@@ -129,7 +129,8 @@ static void GetByIP(char *ipaddr, char realmode)
 	{
 	    if (ipaddr_in == whitelist[j])
 	    {
-		strftime(time, 19, "%F %T", &localtm);
+		memset(&time, 0, sizeof(time));
+		strftime(time, sizeof(time) - 1, "%F %T", &localtm);
 		snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time, (double) 0);
 		strcat(buf, "-----------------------------------------------------------------------\n");
 		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
@@ -149,7 +150,8 @@ static void GetByIP(char *ipaddr, char realmode)
 
     ipIdx = getIPIdx(ipaddr_in);
 
-    strftime(time, 19, "%F %T", &localtm);
+    memset(&time, 0, sizeof(time));
+    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
     snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time,
 	    ((double) ipTable[ipIdx].nflow[SUM]) / MBYTES);
     strcat(buf, "-----------------------------------------------------------------------\n");
@@ -196,7 +198,8 @@ static void GetByFlow(uint overMB, char realmode)
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    strftime(time, 19, "%F %T", &localtm);
+    memset(&time, 0, sizeof(time));
+    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
     snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
     strcat(buf, "------------------------------------------------------------------------------------\n");
     SendBufToSock(peerFd, buf, strlen(buf));
@@ -294,7 +297,8 @@ static void GetByTopN(uint topN, char realmode)
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    strftime(time, 19, "%F %T", &localtm);
+    memset(&time, 0, sizeof(time));
+    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
     snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
     strcat(buf, "------------------------------------------------------------------------------------\n");
     SendBufToSock(peerFd, buf, strlen(buf));
