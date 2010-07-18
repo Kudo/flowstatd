@@ -4,81 +4,81 @@
 #include <unistd.h>
 #include <string.h>
 
-int selectInitImpl(MultiplexorFunc_t *this)
+int selectInitImpl(MultiplexerFunc_t *this)
 {
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    multiplexor->maxFd = 0;
-    FD_ZERO(&multiplexor->evlist);
-    FD_ZERO(&multiplexor->chlist);
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    multiplexer->maxFd = 0;
+    FD_ZERO(&multiplexer->evlist);
+    FD_ZERO(&multiplexer->chlist);
 
     return 1;
 }
 
-int selectUnInitImpl(MultiplexorFunc_t *this)
+int selectUnInitImpl(MultiplexerFunc_t *this)
 {
-    //selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
+    //selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
     return 1;
 }
 
-int selectIsActiveImpl(MultiplexorFunc_t *this, int fd)
+int selectIsActiveImpl(MultiplexerFunc_t *this, int fd)
 {
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    return FD_ISSET(fd, &multiplexor->chlist);
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    return FD_ISSET(fd, &multiplexer->chlist);
 }
 
-int selectAddToListImpl(MultiplexorFunc_t *this, int fd)
+int selectAddToListImpl(MultiplexerFunc_t *this, int fd)
 {
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    FD_SET(fd, &multiplexor->evlist);
-    if (multiplexor->maxFd < fd) multiplexor->maxFd = fd;
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    FD_SET(fd, &multiplexer->evlist);
+    if (multiplexer->maxFd < fd) multiplexer->maxFd = fd;
     return 1;
 }
 
-int selectRemoveFromListImpl(MultiplexorFunc_t *this, int fd)
+int selectRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 {
     int i;
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
 
-    FD_CLR(fd, &multiplexor->evlist);
+    FD_CLR(fd, &multiplexer->evlist);
 
-    for (i = multiplexor->maxFd - 1; i >= 0; --i)
+    for (i = multiplexer->maxFd - 1; i >= 0; --i)
     {
-	if (FD_ISSET(i, &multiplexor->evlist))
+	if (FD_ISSET(i, &multiplexer->evlist))
 	{
-	    multiplexor->maxFd = i;
+	    multiplexer->maxFd = i;
 	    break;
 	}
     }
     return 1;
 }
 
-int selectWaitImpl(MultiplexorFunc_t *this)
+int selectWaitImpl(MultiplexerFunc_t *this)
 {
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
 
-    memcpy(&multiplexor->chlist, &multiplexor->evlist, sizeof(fd_set));
-    return select(multiplexor->maxFd + 1, &multiplexor->chlist, NULL, NULL, NULL);
+    memcpy(&multiplexer->chlist, &multiplexer->evlist, sizeof(fd_set));
+    return select(multiplexer->maxFd + 1, &multiplexer->chlist, NULL, NULL, NULL);
 }
 
-MultiplexorFunc_t *selectNewMultiplexor()
+MultiplexerFunc_t *selectNewMultiplexer()
 {
-    selectMultiplexor_t *multiplexor = (selectMultiplexor_t *) malloc(sizeof(selectMultiplexor_t));
-    multiplexor->funcs.Init = selectInitImpl;
-    multiplexor->funcs.UnInit = selectUnInitImpl;
-    multiplexor->funcs.IsActive = selectIsActiveImpl;
-    multiplexor->funcs.AddToList = selectAddToListImpl;
-    multiplexor->funcs.RemoveFromList = selectRemoveFromListImpl;
-    multiplexor->funcs.Wait = selectWaitImpl;
-    return &(multiplexor->funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *) malloc(sizeof(selectMultiplexer_t));
+    multiplexer->funcs.Init = selectInitImpl;
+    multiplexer->funcs.UnInit = selectUnInitImpl;
+    multiplexer->funcs.IsActive = selectIsActiveImpl;
+    multiplexer->funcs.AddToList = selectAddToListImpl;
+    multiplexer->funcs.RemoveFromList = selectRemoveFromListImpl;
+    multiplexer->funcs.Wait = selectWaitImpl;
+    return &(multiplexer->funcs);
 }
 
-int selectFreeMultiplexor(MultiplexorFunc_t *this)
+int selectFreeMultiplexer(MultiplexerFunc_t *this)
 {
     this->UnInit(this);
-    selectMultiplexor_t *multiplexor = container_of(this, selectMultiplexor_t, funcs);
-    if (multiplexor != NULL)
+    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    if (multiplexer != NULL)
     {
-	free(multiplexor);
+	free(multiplexer);
 	this = NULL;
 	return 1;
     }
@@ -90,82 +90,82 @@ int selectFreeMultiplexor(MultiplexorFunc_t *this)
 
 #ifdef USE_KQUEUE
 
-int kqueueInitImpl(MultiplexorFunc_t *this)
+int kqueueInitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    multiplexor->kqFd = kqueue();
-    if (multiplexor->kqFd == -1)
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    multiplexer->kqFd = kqueue();
+    if (multiplexer->kqFd == -1)
     {
 	return 0;
     }
 
-    multiplexor->monitorFdCount = 0;
+    multiplexer->monitorFdCount = 0;
     return 1;
 }
 
-int kqueueUnInitImpl(MultiplexorFunc_t *this)
+int kqueueUnInitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    close(multiplexor->kqFd);
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    close(multiplexer->kqFd);
     return 1;
 }
 
-int kqueueIsActiveImpl(MultiplexorFunc_t *this, int fd)
+int kqueueIsActiveImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
     register int i = 0;
-    for (i = 0; i < multiplexor->monitorFdCount; ++i)
+    for (i = 0; i < multiplexer->monitorFdCount; ++i)
     {
-	if (multiplexor->evlist[i].ident == (uint) fd && !(multiplexor->evlist[i].flags & EV_ERROR))
+	if (multiplexer->evlist[i].ident == (uint) fd && !(multiplexer->evlist[i].flags & EV_ERROR))
 	    return 1;
     }
     return 0;
 }
 
-int kqueueAddToListImpl(MultiplexorFunc_t *this, int fd)
+int kqueueAddToListImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    EV_SET(&multiplexor->chlist[multiplexor->monitorFdCount], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
-    ++multiplexor->monitorFdCount;
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    EV_SET(&multiplexer->chlist[multiplexer->monitorFdCount], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+    ++multiplexer->monitorFdCount;
     return 1;
 }
 
-int kqueueRemoveFromListImpl(MultiplexorFunc_t *this, int fd)
+int kqueueRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    EV_SET(&multiplexor->chlist[multiplexor->monitorFdCount], fd, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, 0);
-    --multiplexor->monitorFdCount;
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    EV_SET(&multiplexer->chlist[multiplexer->monitorFdCount], fd, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, 0);
+    --multiplexer->monitorFdCount;
     return 0;
 }
 
-int kqueueWaitImpl(MultiplexorFunc_t *this)
+int kqueueWaitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    return kevent(multiplexor->kqFd, 
-	    multiplexor->chlist, multiplexor->monitorFdCount, 
-	    multiplexor->evlist, multiplexor->monitorFdCount,
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    return kevent(multiplexer->kqFd, 
+	    multiplexer->chlist, multiplexer->monitorFdCount, 
+	    multiplexer->evlist, multiplexer->monitorFdCount,
 	    NULL);
 }
 
-MultiplexorFunc_t *kqueueNewMultiplexor()
+MultiplexerFunc_t *kqueueNewMultiplexer()
 {
-    kqueueMultiplexor_t *multiplexor = (kqueueMultiplexor_t *) malloc(sizeof(kqueueMultiplexor_t));
-    multiplexor->funcs.Init = kqueueInitImpl;
-    multiplexor->funcs.UnInit = kqueueUnInitImpl;
-    multiplexor->funcs.IsActive = kqueueIsActiveImpl;
-    multiplexor->funcs.AddToList = kqueueAddToListImpl;
-    multiplexor->funcs.RemoveFromList = kqueueRemoveFromListImpl;
-    multiplexor->funcs.Wait = kqueueWaitImpl;
-    return &(multiplexor->funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *) malloc(sizeof(kqueueMultiplexer_t));
+    multiplexer->funcs.Init = kqueueInitImpl;
+    multiplexer->funcs.UnInit = kqueueUnInitImpl;
+    multiplexer->funcs.IsActive = kqueueIsActiveImpl;
+    multiplexer->funcs.AddToList = kqueueAddToListImpl;
+    multiplexer->funcs.RemoveFromList = kqueueRemoveFromListImpl;
+    multiplexer->funcs.Wait = kqueueWaitImpl;
+    return &(multiplexer->funcs);
 }
 
-int kqueueFreeMultiplexor(MultiplexorFunc_t *this)
+int kqueueFreeMultiplexer(MultiplexerFunc_t *this)
 {
     this->UnInit(this);
-    kqueueMultiplexor_t *multiplexor = container_of(this, kqueueMultiplexor_t, funcs);
-    if (multiplexor != NULL)
+    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    if (multiplexer != NULL)
     {
-	free(multiplexor);
+	free(multiplexer);
 	this = NULL;
 	return 1;
     }

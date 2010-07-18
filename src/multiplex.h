@@ -40,35 +40,35 @@
         (type *)( (char *)__mptr - offsetof(type,member) );})
 
 
-#define NewMultiplexor(name, ...) name##NewMultiplexor(__VA_ARGS__)
-#define FreeMultiplexor(name, ...) name##FreeMultiplexor(__VA_ARGS__)
+#define NewMultiplexer(name, ...) name##NewMultiplexer(__VA_ARGS__)
+#define FreeMultiplexer(name, ...) name##FreeMultiplexer(__VA_ARGS__)
 
-typedef struct _MultiplexorFunc_t MultiplexorFunc_t;
-struct _MultiplexorFunc_t {
-    int (*Init)(MultiplexorFunc_t *this);
-    int (*UnInit)(MultiplexorFunc_t *this);
+typedef struct _MultiplexerFunc_t MultiplexerFunc_t;
+struct _MultiplexerFunc_t {
+    int (*Init)(MultiplexerFunc_t *this);
+    int (*UnInit)(MultiplexerFunc_t *this);
 
-    int (*IsActive)(MultiplexorFunc_t *this, int fd);
-    int (*AddToList)(MultiplexorFunc_t *this, int fd);
-    int (*RemoveFromList)(MultiplexorFunc_t *this, int fd);
-    int (*Wait)(MultiplexorFunc_t *this);
+    int (*IsActive)(MultiplexerFunc_t *this, int fd);
+    int (*AddToList)(MultiplexerFunc_t *this, int fd);
+    int (*RemoveFromList)(MultiplexerFunc_t *this, int fd);
+    int (*Wait)(MultiplexerFunc_t *this);
 };
 
 #ifdef USE_KQUEUE
-typedef struct _kqueueMultiplexor_t {
-    MultiplexorFunc_t funcs;
+typedef struct _kqueueMultiplexer_t {
+    MultiplexerFunc_t funcs;
 
     int kqFd;
     struct kevent evlist[MAX_MONITOR_FD_COUNT];
     struct kevent chlist[MAX_MONITOR_FD_COUNT];
     unsigned int monitorFdCount;
-} kqueueMultiplexor_t;
+} kqueueMultiplexer_t;
 
 #endif
 
-typedef struct _selectMultiplexor_t selectMultiplexor_t;
-struct _selectMultiplexor_t {
-    MultiplexorFunc_t funcs;
+typedef struct _selectMultiplexer_t selectMultiplexer_t;
+struct _selectMultiplexer_t {
+    MultiplexerFunc_t funcs;
 
     fd_set evlist;
     fd_set chlist;

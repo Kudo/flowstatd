@@ -3,7 +3,7 @@
 extern int netflowSockFd;
 extern int flowdSockFd;
 extern int peerFd;
-extern MultiplexorFunc_t *multiplexor;
+extern MultiplexerFunc_t *multiplexer;
 
 void SendBufToSock(int sckfd, const char *buf, int len)
 {
@@ -67,7 +67,7 @@ void Exits(int s)
 {
     close(netflowSockFd);
     close(flowdSockFd);
-    FreeMultiplexor(select, multiplexor);
+    FreeMultiplexer(select, multiplexer);
     ExportRecord(TODAY);
     free(ipTable);
     exit(EXIT_SUCCESS);
@@ -78,7 +78,7 @@ void SockExit(int s)
     SendBufToSock(peerFd, "Timeout.\n", 9);
     close(netflowSockFd);
     close(flowdSockFd);
-    FreeMultiplexor(select, multiplexor);
+    FreeMultiplexer(select, multiplexer);
     free(ipTable);
     exit(EXIT_SUCCESS);
 }

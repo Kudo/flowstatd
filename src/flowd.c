@@ -3,7 +3,7 @@
 int netflowSockFd;
 int flowdSockFd;
 int peerFd;
-MultiplexorFunc_t *multiplexor;
+MultiplexerFunc_t *multiplexer;
 
 char savePrefix[100];
 static char subnetFile[100];
@@ -359,18 +359,18 @@ int main(int argc, char *argv[])
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
     flowdSockFd = BuildTCPSock(bindIpAddr, flowdBindPort);
 
-    multiplexor = NewMultiplexor(select);
-    if (multiplexor->Init(multiplexor) == 0)
-	Diep("Multiplexor Init() failed");
+    multiplexer = NewMultiplexer(select);
+    if (multiplexer->Init(multiplexer) == 0)
+	Diep("Multiplexer Init() failed");
     
-    multiplexor->AddToList(multiplexor, netflowSockFd);
-    multiplexor->AddToList(multiplexor, flowdSockFd);
+    multiplexer->AddToList(multiplexer, netflowSockFd);
+    multiplexer->AddToList(multiplexer, flowdSockFd);
 
     plen = sizeof(struct sockaddr_in);
 
     while (1)
     {
-	nev = multiplexor->Wait(multiplexor);
+	nev = multiplexer->Wait(multiplexer);
 
 	for (i = 0; i < nev; i++) 
 	{
@@ -382,7 +382,7 @@ int main(int argc, char *argv[])
 	    }
 #endif
 
-	    if (multiplexor->IsActive(multiplexor, netflowSockFd))
+	    if (multiplexer->IsActive(multiplexer, netflowSockFd))
 	    {
 		memset(buf, 0, BUFSIZE);
 		if ((n = recvfrom(netflowSockFd, buf, BUFSIZE, 0, (struct sockaddr *) &pin, &plen)) == -1)
@@ -406,7 +406,7 @@ int main(int argc, char *argv[])
 		if ((ch = isValidNFP(buf, n)) > 0)
 		    InsertFlowEntry(buf, ch);
 	    }
-	    else if (multiplexor->IsActive(multiplexor, flowdSockFd))
+	    else if (multiplexer->IsActive(multiplexer, flowdSockFd))
 	    {
 		if ((peerFd = accept(flowdSockFd, (struct sockaddr *) &pin, &plen)) == -1)
 		{
@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    FreeMultiplexor(select, multiplexor);
+    FreeMultiplexer(select, multiplexer);
     close(netflowSockFd);
     close(flowdSockFd);
     free(ipTable);
