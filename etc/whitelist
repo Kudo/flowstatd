@@ -1,5 +1,7 @@
-140.123.103.8
-140.123.72.150
-140.123.5.13
-140.123.122.18
-140.123.5.24
+#
+# Whitelist setting - IP in this list which flow will be 0 in default 
+#
+# Format:
+#	ip
+# 140.123.1.1
+# 140.123.1.2
