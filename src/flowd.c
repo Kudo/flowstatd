@@ -265,6 +265,7 @@ int main(int argc, char *argv[])
     int nev;
 
     verbose = 0;
+    daemonMode = 0;
     debug = 0;
     sumIpCount = 0;
     strncpy(savePrefix, DEF_SAVE_PREFIX, 99);
@@ -275,7 +276,7 @@ int main(int argc, char *argv[])
     netflowBindPort = htons(NETFLOW_LISTEN_PORT);
     flowdBindPort = htons(FLOWD_LISTEN_PORT);
 
-    while ((ch = getopt(argc, argv, "i:p:P:s:vdw:")) != -1)
+    while ((ch = getopt(argc, argv, "i:p:P:s:vdDw:")) != -1)
     {
 	switch ((char) ch)
 	{
@@ -309,6 +310,10 @@ int main(int argc, char *argv[])
 
 	    case 'd':		/* Debug mode */
 		debug = 1;
+		break;
+
+	    case 'D':		/* Daemon mode */
+		daemonMode = 1;
 		break;
 
 	    case 'w':
@@ -367,6 +372,15 @@ int main(int argc, char *argv[])
     multiplexer->AddToList(multiplexer, flowdSockFd);
 
     plen = sizeof(struct sockaddr_in);
+
+    if (daemonMode)
+    {
+	if (daemon(0, 0) == -1)
+	{
+	    perror("daemon() error");
+	    exit(EXIT_FAILURE);
+	}
+    }
 
     while (1)
     {
