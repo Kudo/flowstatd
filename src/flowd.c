@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
 
     plen = sizeof(struct sockaddr_in);
 
-    if (daemonMode)
+    if (!verbose && !debug && daemonMode)
     {
 	if (daemon(0, 0) == -1)
 	{
