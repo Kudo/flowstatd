@@ -55,7 +55,7 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
 	{
 	    if (ipaddr_in == whitelist[j])
 	    {
-		snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, (double) 0);
+		snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %4d-%02d-%02d\nSUM FLOW: %-12.6f (MB)\n", ipaddr, year, month, day, (double) 0);
 		strcat(buf, "-----------------------------------------------------------------------\n");
 		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
 		strcat(buf, "-----------------------------------------------------------------------\n");
@@ -74,7 +74,7 @@ static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode
     gzseek(fpZip, sizeof(struct hostflow) * currSumIp, SEEK_CUR);
     gzread(fpZip, &ipFlow, sizeof(struct hostflow));
 
-    snprintf(buf, BUFSIZE - 1, "IP: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, 
+    snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %4d-%02d-%02d\nSUM FLOW: %-12.6f (MB)\n", ipaddr, year, month, day,
 	    ((double) ipFlow.nflow[SUM]) / MBYTES);
     strcat(buf, "-----------------------------------------------------------------------\n");
     strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
@@ -252,7 +252,7 @@ static void GetOldByFlow(int year, int month, int day, uint overMB, char realmod
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+    snprintf(buf, BUFSIZE - 1, "Time: %4d-%02d-%02d\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", year, month, day);
     strcat(buf, "------------------------------------------------------------------------------------\n");
     SendBufToSock(peerFd, buf, strlen(buf));
 
@@ -351,7 +351,7 @@ static void GetOldByTopN(int year, int month, int day, uint topN, char realmode)
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    snprintf(buf, BUFSIZE - 1, "No.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n");
+    snprintf(buf, BUFSIZE - 1, "Time: %4d-%02d-%02d\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", year, month, day);
     strcat(buf, "------------------------------------------------------------------------------------\n");
     SendBufToSock(peerFd, buf, strlen(buf));
 
