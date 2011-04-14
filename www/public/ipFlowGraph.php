@@ -107,7 +107,7 @@ function getFlowData($ip, $date = NULL)
     if (count($lines) < 0 || $lines[0] == "No data") {
 	$retData = array(
 	    'ip' => $ip,
-	    'time' => $_GET[date] ? $_GET[date] : 'Now',
+	    'time' => $_GET['date'] ? $_GET['date'] : 'Now',
 	    'totalFlow' => 0,
 	);
 
