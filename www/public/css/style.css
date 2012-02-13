@@ -233,6 +233,7 @@ hr {
     width: 600px;
     height: 400px;
     background: url(../images/loading.gif) no-repeat center center;
+    display: none;
 }
 
 /* Flow list table */

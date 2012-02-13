@@ -140,6 +140,11 @@ function getFlowData($ip, $date = NULL)
 }
 
 ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>國立中正大學宿網流量統計</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <script type="text/javascript" src="js/json2.js"></script>
 <script type="text/javascript" src="js/swfobject.js"></script>
 <script type="text/javascript">
@@ -164,6 +169,9 @@ function findSWF(movieName) {
 var data = <?php echo $chart->toPrettyString(); ?>;
 
 </script>
+</head>
 
-
+<body>
 <div id="flowChart"></div>
+</body>
+</html>

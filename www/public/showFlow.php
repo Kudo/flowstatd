@@ -26,8 +26,8 @@ Released   : 20071108
 -->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <title>國立中正大學宿網流量統計</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <meta name="keywords" content="ccudorm flow" />
 <meta name="description" content="" />
 <link href="css/style.css" rel="stylesheet" type="text/css" media="screen" />
@@ -42,7 +42,7 @@ Released   : 20071108
 </head>
 <body>
 <div id="logo">
-	<h1><a href="http://netflow.cna.ccu.edu.tw/new2/">國立中正大學宿網流量統計</a></h1>
+	<h1><a href="http://netflow.cna.ccu.edu.tw/">國立中正大學宿網流量統計</a></h1>
 	<h2>By <a href="http://www.cna.ccu.edu.tw/">CNA 校園網路策進會</a></h2>
 </div>
 <div id="menu">
@@ -107,14 +107,15 @@ else
 			function refreshFlowPage() {
 				var chartObj = $("#flowchart");
 				var loadingObj = $("#loading");
+				var timestamp = new Date().getTime();
 
 				chartObj.hide();
 				loadingObj.show();
 
 				if (g_selectedDate)
-				    chartObj.load("ipFlowGraph.php?ip=<?php echo $_GET['ip']; ?>&date="+g_selectedDate, function(){ loadingObj.hide(); chartObj.show(); });
+				    chartObj.load("ipFlowGraph.php?ip=<?php echo $_GET['ip']; ?>&date="+g_selectedDate+"&_="+timestamp, function(){ loadingObj.hide(); chartObj.show(); });
 				else
-				    chartObj.load("ipFlowGraph.php?ip=<?php echo $_GET['ip']; ?>", function(){ loadingObj.hide(); chartObj.show(); });
+				    chartObj.load("ipFlowGraph.php?ip=<?php echo $_GET['ip']; ?>&_="+timestamp, function(){ loadingObj.hide(); chartObj.show(); });
 			};
 
 			$("#calendar").datepicker({ 
