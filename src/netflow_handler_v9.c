@@ -137,7 +137,6 @@ static int _HandleData(struct NF_V9_header *nfHeader, const char *dataBegin, int
 static void _InsertFlowEntry(const char *packetBuf, int packetLen)
 {
     unsigned int flowSetPos = sizeof(struct NF_V9_header);
-    unsigned int flowSetFieldPos = flowSetPos;
 
     while (flowSetPos < packetLen)
     {
@@ -165,7 +164,6 @@ static void _InsertFlowEntry(const char *packetBuf, int packetLen)
 int AddFlowDataV9Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen)
 {
     //NetflowHandlerV9_t *nfHandler = (NetflowHandlerV9_t *)this;
-    //NetflowHandlerV9_t *nfHandler = container_of(this, NetflowHandlerV9_t, funcs);
     _InsertFlowEntry(packetBuf, packetLen);
     return 1;
 }

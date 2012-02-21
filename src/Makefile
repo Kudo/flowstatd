@@ -23,8 +23,8 @@
 ##########################################
 ##      Variable Definition
 CC	= gcc
-#CFLAGS	= -O2 -Wall
-CFLAGS	= -g -Wall
+CFLAGS	= -O2 -Wall
+#CFLAGS	= -g -Wall
 LIB	= -lz
 
 .SUFFIXES: .o

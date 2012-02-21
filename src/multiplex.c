@@ -28,7 +28,7 @@
 
 int selectInitImpl(MultiplexerFunc_t *this)
 {
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
     multiplexer->maxFd = 0;
     FD_ZERO(&multiplexer->evlist);
     FD_ZERO(&multiplexer->chlist);
@@ -38,19 +38,19 @@ int selectInitImpl(MultiplexerFunc_t *this)
 
 int selectUnInitImpl(MultiplexerFunc_t *this)
 {
-    //selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    //selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
     return 1;
 }
 
 int selectIsActiveImpl(MultiplexerFunc_t *this, int fd)
 {
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
     return FD_ISSET(fd, &multiplexer->chlist);
 }
 
 int selectAddToListImpl(MultiplexerFunc_t *this, int fd)
 {
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
     FD_SET(fd, &multiplexer->evlist);
     if (multiplexer->maxFd < fd) multiplexer->maxFd = fd;
     return 1;
@@ -59,7 +59,7 @@ int selectAddToListImpl(MultiplexerFunc_t *this, int fd)
 int selectRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 {
     int i;
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
 
     FD_CLR(fd, &multiplexer->evlist);
 
@@ -76,7 +76,7 @@ int selectRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 
 int selectWaitImpl(MultiplexerFunc_t *this)
 {
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
 
     memcpy(&multiplexer->chlist, &multiplexer->evlist, sizeof(fd_set));
     return select(multiplexer->maxFd + 1, &multiplexer->chlist, NULL, NULL, NULL);
@@ -97,7 +97,7 @@ MultiplexerFunc_t *selectNewMultiplexer()
 int selectFreeMultiplexer(MultiplexerFunc_t *this)
 {
     this->UnInit(this);
-    selectMultiplexer_t *multiplexer = container_of(this, selectMultiplexer_t, funcs);
+    selectMultiplexer_t *multiplexer = (selectMultiplexer_t *)this;
     if (multiplexer != NULL)
     {
 	free(multiplexer);
@@ -114,7 +114,7 @@ int selectFreeMultiplexer(MultiplexerFunc_t *this)
 
 int kqueueInitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     multiplexer->kqFd = kqueue();
     if (multiplexer->kqFd == -1)
     {
@@ -127,14 +127,14 @@ int kqueueInitImpl(MultiplexerFunc_t *this)
 
 int kqueueUnInitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     close(multiplexer->kqFd);
     return 1;
 }
 
 int kqueueIsActiveImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     register int i = 0;
     for (i = 0; i < multiplexer->monitorFdCount; ++i)
     {
@@ -146,7 +146,7 @@ int kqueueIsActiveImpl(MultiplexerFunc_t *this, int fd)
 
 int kqueueAddToListImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     EV_SET(&multiplexer->chlist[multiplexer->monitorFdCount], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
     ++multiplexer->monitorFdCount;
     return 1;
@@ -154,7 +154,7 @@ int kqueueAddToListImpl(MultiplexerFunc_t *this, int fd)
 
 int kqueueRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     EV_SET(&multiplexer->chlist[multiplexer->monitorFdCount], fd, EVFILT_READ, EV_DELETE | EV_DISABLE, 0, 0, 0);
     --multiplexer->monitorFdCount;
     return 0;
@@ -162,7 +162,7 @@ int kqueueRemoveFromListImpl(MultiplexerFunc_t *this, int fd)
 
 int kqueueWaitImpl(MultiplexerFunc_t *this)
 {
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     return kevent(multiplexer->kqFd, 
 	    multiplexer->chlist, multiplexer->monitorFdCount, 
 	    multiplexer->evlist, multiplexer->monitorFdCount,
@@ -184,7 +184,7 @@ MultiplexerFunc_t *kqueueNewMultiplexer()
 int kqueueFreeMultiplexer(MultiplexerFunc_t *this)
 {
     this->UnInit(this);
-    kqueueMultiplexer_t *multiplexer = container_of(this, kqueueMultiplexer_t, funcs);
+    kqueueMultiplexer_t *multiplexer = (kqueueMultiplexer_t *)this;
     if (multiplexer != NULL)
     {
 	free(multiplexer);

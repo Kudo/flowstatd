@@ -90,7 +90,6 @@ static void InsertFlowEntry(const char *packetBuf, int recCount)
 int AddFlowDataV5Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen)
 {
     //NetflowHandlerV5_t *nfHandler = (NetflowHandlerV5_t *)this;
-    //NetflowHandlerV5_t *nfHandler = container_of(this, NetflowHandlerV5_t, funcs);
     int recCount = IsValidPacket(packetBuf, packetLen);
     if (recCount > 0)
 	InsertFlowEntry(packetBuf, recCount);

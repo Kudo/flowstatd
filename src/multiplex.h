@@ -21,10 +21,9 @@
 
 #ifndef _MULTIPLEX_H
 #define _MULTIPLEX_H
+#include "flowd.h"
 
 #define MAX_MONITOR_FD_COUNT	    2
-
-#undef USE_KQUEUE	    // Only avaliable on FreeBSD or use select() in default
 
 #ifdef USE_KQUEUE
 #include <sys/types.h>
