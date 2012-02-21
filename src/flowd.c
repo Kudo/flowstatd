@@ -1,6 +1,6 @@
 /*
     flowd - Netflow statistics daemon
-    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -18,8 +18,21 @@
 
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <zlib.h>
 #include "flowd.h"
+#include "command.h"
+#include "multiplex.h"
+#include "netflow.h"
+#include "socket.h"
 
 int netflowSockFd;
 int flowdSockFd;
@@ -403,6 +416,9 @@ int main(int argc, char *argv[])
 	}
     }
 
+
+    NetflowHandlerInit();
+
     while (1)
     {
 	nev = multiplexer->Wait(multiplexer);
@@ -436,10 +452,11 @@ int main(int argc, char *argv[])
 		    preHour = localtm.tm_hour;
 		}
 		else
+		{
 		    preHour = localtm.tm_hour;
+		}
 
-		if ((ch = isValidNFP(buf, n)) > 0)
-		    InsertFlowEntry(buf, ch);
+		AddFlowData(buf, n);
 	    }
 	    else if (multiplexer->IsActive(multiplexer, flowdSockFd))
 	    {
@@ -463,6 +480,7 @@ int main(int argc, char *argv[])
 	}
     }
 
+    NetflowHandlerUnInit();
     FreeMultiplexer(multiplexer);
     close(netflowSockFd);
     close(flowdSockFd);

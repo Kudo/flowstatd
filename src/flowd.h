@@ -1,6 +1,6 @@
 /*
     flowd - Netflow statistics daemon
-    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -22,22 +22,8 @@
 #ifndef _FLOWD_H_
 #define _FLOWD_H_
 
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <signal.h>
-#include <errno.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/stat.h>
-#include <zlib.h>
-
-#include <sys/time.h>
-#include "multiplex.h"
 
 //#define	MBYTES		1048576
 #define MBYTES		1000000
@@ -79,51 +65,23 @@ struct subnet {
     uint ipCount;
 };
 
-/*
- * From flow-tools library
+#undef offsetof
+#ifdef __compiler_offsetof
+#define offsetof(TYPE,MEMBER) __compiler_offsetof(TYPE,MEMBER)
+#else
+#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
+#endif
+
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:        the pointer to the member.
+ * @type:       the type of the container struct this is embedded in.
+ * @member:     the name of the member within the struct.
+ *
  */
-struct fttime {
-    uint secs;
-    uint msecs;
-};
-
-#define	NF_HEADER_SIZE	sizeof(struct NF_header)
-#define NF_RECORD_SIZE	sizeof(struct NF_record)
-
-struct NF_header {
-    uint16_t	version;
-    uint16_t	count;
-    uint32_t	SysUptime;
-    uint32_t	unix_secs;
-    uint32_t	unix_nsecs;
-    uint32_t	flow_sequence;
-    uint8_t	engine_type;
-    uint8_t	engine_id;
-    uint16_t	reserved;
-};
-
-struct NF_record {
-    uint32_t	srcaddr;
-    uint32_t	dstaddr;
-    uint32_t	nexthop;
-    uint16_t	input;
-    uint16_t	output;
-    uint32_t	dPkts;
-    uint32_t	dOctets;
-    uint32_t	First;
-    uint32_t	Last;
-    uint16_t	srcport;
-    uint16_t	dstport;
-    uint8_t	pad1;
-    uint8_t	tcp_flags;
-    uint8_t	prot;
-    uint8_t	tos;
-    uint16_t	src_as;
-    uint16_t	dst_as;
-    uint8_t	src_mask;
-    uint8_t	dst_mask;
-    uint16_t	pad2;
-};
+#define container_of(ptr, type, member) ({                      \
+        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+        (type *)( (char *)__mptr - offsetof(type,member) );})
 
 /*
  * Global variables
@@ -140,6 +98,9 @@ extern in_addr_t whitelist[MAX_WHITELIST];
 extern uint nSubnet;
 extern uint sumIpCount;
 
-#include "flowd.p"
 
+int ImportRecord(char *fname);
+void ExportRecord(int mode);
+void Warn(const char *msg);
+void Diep(const char *s);
 #endif

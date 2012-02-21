@@ -1,6 +1,6 @@
 #
 #    flowd - Netflow statistics daemon
-#    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+#    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 #
 #    This program is free software; you can redistribute it and/or
 #    modify it under the terms of the GNU General Public License
@@ -23,16 +23,27 @@
 ##########################################
 ##      Variable Definition
 CC	= gcc
-CPROTO	= cproto
-CFLAGS	= -O2 -Wall
-#CFLAGS	= -g -Wall
+#CFLAGS	= -O2 -Wall
+CFLAGS	= -g -Wall
 LIB	= -lz
-SRC	= command.c netflow.c flowd.c fttime.c multiplex.c socket.c global.c
-OBJ	= $(SRC:.c=.o)
 
 .SUFFIXES: .o
 .c.o:	;	$(CC) $(CFLAGS) -c $*.c
 
+##########################################
+##	Source Files
+##########################################
+SRC	= command.c
+SRC	+= netflow.c
+SRC	+= netflow_handler_v5.c
+SRC	+= netflow_handler_v9.c
+SRC	+= flowd.c
+SRC	+= fttime.c
+SRC	+= multiplex.c
+SRC	+= socket.c
+SRC	+= global.c
+
+OBJ	= $(SRC:.c=.o)
 ##########################################
 ##	Usage
 ##########################################
@@ -40,9 +51,6 @@ all:	flowd
 
 flowd:	$(OBJ)
 	$(CC) $(CFLAGS) $(LIB) -o ../bin/$@ $?
-
-flowd.p: $(SRC)
-	$(CPROTO) -o $@ $(SRC)
 
 clean:
 	-rm -f ../bin/flowd $(OBJ)

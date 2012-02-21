@@ -1,6 +1,6 @@
 /*
     flowd - Netflow statistics daemon
-    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -33,25 +33,6 @@
 #else
 #include <sys/select.h>
 #endif
-
-
-#undef offsetof
-#ifdef __compiler_offsetof
-#define offsetof(TYPE,MEMBER) __compiler_offsetof(TYPE,MEMBER)
-#else
-#define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
-#endif
-
-/**
- * container_of - cast a member of a structure out to the containing structure
- * @ptr:        the pointer to the member.
- * @type:       the type of the container struct this is embedded in.
- * @member:     the name of the member within the struct.
- *
- */
-#define container_of(ptr, type, member) ({                      \
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-        (type *)( (char *)__mptr - offsetof(type,member) );})
 
 
 #ifdef USE_KQUEUE
@@ -88,6 +69,15 @@ typedef struct _kqueueMultiplexer_t {
     unsigned int monitorFdCount;
 } kqueueMultiplexer_t;
 
+int kqueueInitImpl(MultiplexerFunc_t *this);
+int kqueueUnInitImpl(MultiplexerFunc_t *this);
+int kqueueIsActiveImpl(MultiplexerFunc_t *this, int fd);
+int kqueueAddToListImpl(MultiplexerFunc_t *this, int fd);
+int kqueueRemoveFromListImpl(MultiplexerFunc_t *this, int fd);
+int kqueueWaitImpl(MultiplexerFunc_t *this);
+MultiplexerFunc_t *kqueueNewMultiplexer();
+int kqueueFreeMultiplexer(MultiplexerFunc_t *this);
+
 #endif
 
 typedef struct _selectMultiplexer_t selectMultiplexer_t;
@@ -99,5 +89,13 @@ struct _selectMultiplexer_t {
     unsigned int maxFd;
 };
 
+int selectInitImpl(MultiplexerFunc_t *this);
+int selectUnInitImpl(MultiplexerFunc_t *this);
+int selectIsActiveImpl(MultiplexerFunc_t *this, int fd);
+int selectAddToListImpl(MultiplexerFunc_t *this, int fd);
+int selectRemoveFromListImpl(MultiplexerFunc_t *this, int fd);
+int selectWaitImpl(MultiplexerFunc_t *this);
+MultiplexerFunc_t *selectNewMultiplexer();
+int selectFreeMultiplexer(MultiplexerFunc_t *this);
 
 #endif

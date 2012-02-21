@@ -19,20 +19,9 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 
-#include <time.h>
-#include "flowd.h"
+#ifndef _COMMAND_H_
+#define _COMMAND_H_
 
-/*
- * Global variables
- */
-int verbose;
-int daemonMode;
-int debug;
-struct tm localtm;
-struct hostflow *ipTable;
-struct hostflow *hashTable;
-struct subnet myNet;
-struct subnet rcvNetList[MAX_SUBNET];
-in_addr_t whitelist[MAX_WHITELIST];
-uint nSubnet;
-uint sumIpCount;
+void parseCmd(char *cmd);
+
+#endif	/* _COMMAND_H_ */

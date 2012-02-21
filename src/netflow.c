@@ -1,6 +1,6 @@
 /*
     flowd - Netflow statistics daemon
-    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -19,10 +19,59 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include "fttime.h"
+#include "netflow.h"
+#include "netflow_handler_v5.h"
+#include "netflow_handler_v9.h"
 #include "flowd.h"
 
-#define	RET_IN_MYNET	    -1
-#define RET_NOT_IN_MYNET	    -2
+NetflowHandlerFunc_t *g_nfHandlerV5 = NULL;
+NetflowHandlerFunc_t *g_nfHandlerV9 = NULL;
+
+int NetflowHandlerInit()
+{
+    g_nfHandlerV5 = NewNetflowHandlerV5();
+    g_nfHandlerV5->Init(g_nfHandlerV5);
+    g_nfHandlerV9 = NewNetflowHandlerV9();
+    g_nfHandlerV9->Init(g_nfHandlerV9);
+    return 1;
+}
+
+int NetflowHandlerUnInit()
+{
+    FreeNetflowHandlerV5(g_nfHandlerV5);
+    FreeNetflowHandlerV9(g_nfHandlerV9);
+    return 1;
+}
+
+int AddFlowData(const char *packetBuf, int packetLen)
+{
+    uint16_t *version = (uint16_t *) packetBuf;
+    NetflowHandlerFunc_t *nfHandler = NULL;
+    switch (ntohs(*version))
+    {
+	case 9:
+	    nfHandler = g_nfHandlerV9;
+	    break;
+	case 5:
+	    nfHandler = g_nfHandlerV5;
+	    break;
+	default:
+	    {
+		return 0;
+	    }
+	    break;
+    }
+
+    nfHandler->AddFlowData(nfHandler, packetBuf, packetLen);
+
+    return 1;
+}
 
 inline int getIPIdx(in_addr_t ipaddr)
 {
@@ -61,31 +110,7 @@ inline int getIPIdx(in_addr_t ipaddr)
     return RET_NOT_IN_MYNET;
 }
 
-int isValidNFP(const char *buf, int len)
-{
-    int recCount;
-    struct NF_header *header;
-
-    if ((len - NF_HEADER_SIZE) % NF_RECORD_SIZE != 0)
-    {
-	Warn("Warning: Invalid Netflow V5 packet.");
-	return 0;
-    }
-
-    recCount = (len - NF_HEADER_SIZE) / NF_RECORD_SIZE;
-
-    header = (struct NF_header *) buf;
-
-    if (ntohs(header->count) != recCount)
-    {
-	Warn("Warning: Invalid Netflow V5 packet.");
-	return 0;
-    }
-
-    return recCount;
-}
-
-static inline void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
+void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
 {
     if (debug)
     {
@@ -98,57 +123,46 @@ static inline void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32
 	inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
 	inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
 
-	printf("%-17.17s -> %-17.17s Octets: %u\n", src_ip, dst_ip, ntohl(octets));
+	printf("%-17.17s -> %-17.17s Octets: %u\n", src_ip, dst_ip, octets);
     }
 }
 
-void InsertFlowEntry(char *buf, int recCount)
+struct tm ConvertNfTime(NfTimeInfo_t *nfTimeInfo)
 {
-    int i;
-    int srcIPIdx, dstIPIdx;
-    int octets;
-    char *ptr;
-    struct NF_header *header;
-    struct NF_record *record;
-    struct fttime ftt;
+    struct fttime ftt = ftltime(nfTimeInfo->SysUptime, nfTimeInfo->UnixSecs, nfTimeInfo->UnixNsecs, nfTimeInfo->FirstPacketTime);
     struct tm tmTime;
+    localtime_r((time_t *) &ftt.secs, &tmTime);
+    return tmTime;
+}
 
-    header = (struct NF_header *) buf;
-    ptr = buf + NF_HEADER_SIZE;
+int InsertNfInfoToIpTable(in_addr_t srcAddr, in_addr_t dstAddr, unsigned int flowBytes, NfTimeInfo_t *nfTimeInfo)
+{
+    int srcIPIdx = getIPIdx(srcAddr);
+    int dstIPIdx = getIPIdx(dstAddr);
+    struct tm tmTime = ConvertNfTime(nfTimeInfo);
 
-    for (i = 0 ; i < recCount; i++)
+    displayFlowEntry(srcAddr, dstAddr, flowBytes);
+    if (srcIPIdx >= 0 && dstIPIdx == RET_NOT_IN_MYNET)
     {
-	ptr += NF_RECORD_SIZE;
-	record = (struct NF_record *) ptr;
-
-	ftt = ftltime(ntohl(header->SysUptime), ntohl(header->unix_secs), ntohl(header->unix_nsecs), ntohl(record->First));
-	localtime_r((time_t *) &ftt.secs, &tmTime);
-	octets = ntohl(record->dOctets);
-
-	srcIPIdx = getIPIdx(record->srcaddr);
-	dstIPIdx = getIPIdx(record->dstaddr);
-
-	if (srcIPIdx >= 0 && dstIPIdx == RET_NOT_IN_MYNET)
+	if (tmTime.tm_mday == localtm.tm_mday)
 	{
-	    if (tmTime.tm_mday == localtm.tm_mday)
-	    {
-		displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
-		ipTable[srcIPIdx].sin_addr.s_addr = record->srcaddr;
-		ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] += octets;
-		ipTable[srcIPIdx].nflow[UPLOAD] += octets;
-		ipTable[srcIPIdx].nflow[SUM] += octets;
-	    }
-	}
-	else if (dstIPIdx >= 0 && srcIPIdx == RET_NOT_IN_MYNET)
-	{
-	    if (tmTime.tm_mday == localtm.tm_mday)
-	    {
-		displayFlowEntry(record->srcaddr, record->dstaddr, record->dOctets);
-		ipTable[dstIPIdx].sin_addr.s_addr = record->dstaddr;
-		ipTable[dstIPIdx].hflow[tmTime.tm_hour][DOWNLOAD] += octets;
-		ipTable[dstIPIdx].nflow[DOWNLOAD] += octets;
-		ipTable[dstIPIdx].nflow[SUM] += octets;
-	    }
+	    displayFlowEntry(srcAddr, dstAddr, flowBytes);
+	    ipTable[srcIPIdx].sin_addr.s_addr = srcAddr;
+	    ipTable[srcIPIdx].hflow[tmTime.tm_hour][UPLOAD] += flowBytes;
+	    ipTable[srcIPIdx].nflow[UPLOAD] += flowBytes;
+	    ipTable[srcIPIdx].nflow[SUM] += flowBytes;
 	}
     }
+    else if (dstIPIdx >= 0 && srcIPIdx == RET_NOT_IN_MYNET)
+    {
+	if (tmTime.tm_mday == localtm.tm_mday)
+	{
+	    displayFlowEntry(srcAddr, dstAddr, flowBytes);
+	    ipTable[dstIPIdx].sin_addr.s_addr = dstAddr;
+	    ipTable[dstIPIdx].hflow[tmTime.tm_hour][DOWNLOAD] += flowBytes;
+	    ipTable[dstIPIdx].nflow[DOWNLOAD] += flowBytes;
+	    ipTable[dstIPIdx].nflow[SUM] += flowBytes;
+	}
+    }
+    return 1;
 }

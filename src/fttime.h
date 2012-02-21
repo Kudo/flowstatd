@@ -32,7 +32,15 @@
  */
 
 
-#include "fttime.h"
+#ifndef _FTTIME_H_
+#define _FTTIME_H_
+
+#include <sys/types.h>
+
+struct fttime {
+    uint32_t secs;
+    uint32_t msecs;
+};
 
 /*
  * function: ftltime
@@ -44,41 +52,6 @@
  *
  * returns: struct fttime
  */
-struct fttime ftltime(uint32_t sys, uint32_t secs, uint32_t nsecs, uint32_t t)
-{
-    uint32_t sys_s, sys_m;
-    struct fttime ftt;
+struct fttime ftltime(uint32_t sys, uint32_t secs, uint32_t nsecs, uint32_t t);
 
-    /* sysUpTime is in milliseconds, convert to seconds/milliseconds */
-    sys_s = sys / 1000;
-    sys_m = sys % 1000;
-
-
-    /* unix seconds/nanoseconds to seconds/milliseconds */
-    ftt.secs = secs;
-    ftt.msecs = nsecs / 1000000L;
-
-    /* subtract sysUpTime from unix seconds */
-    ftt.secs -= sys_s;
-
-    /* borrow a second? */
-    if (sys_m > ftt.msecs) {
-        -- ftt.secs;
-        ftt.msecs += 1000;
-    }
-    ftt.msecs -= sys_m;
-
-    /* add offset which is in milliseconds */
-    ftt.secs += t / 1000;
-    ftt.msecs += t % 1000;
-
-    /* fix if milliseconds >= 1000 */
-    if (ftt.msecs >= 1000) {
-        ftt.msecs -= 1000;
-        ftt.secs += 1;
-    }
-
-    return ftt;
-
-} /* ftltime */
-
+#endif	    /* _FTTIME_H_ */

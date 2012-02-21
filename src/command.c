@@ -1,6 +1,6 @@
 /*
     flowd - Netflow statistics daemon
-    Copyright (C) 2011 Kudo Chien <ckchien@gmail.com>
+    Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -19,7 +19,16 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <zlib.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include "flowd.h"
+#include "socket.h"
+#include "netflow.h"
 
 extern int peerFd;
 extern char savePrefix[100];
@@ -527,6 +536,8 @@ void parseCmd(char *cmd)
 	SendBufToSock(peerFd, "Invalid Command.\n", 18);
     }
     else
+    {
 	SendBufToSock(peerFd, "Invalid Command.\n", 18);
+    }
 }
 
