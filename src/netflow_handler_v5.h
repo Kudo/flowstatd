@@ -70,7 +70,7 @@ typedef struct _NetflowHandlerV5_t {
 
 int NfHandlerInitV5Impl(NetflowHandlerFunc_t *this);
 int NfHandlerUnInitV5Impl(NetflowHandlerFunc_t *this);
-int AddFlowDataV5Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen);
+int AddFlowDataV5Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr);
 NetflowHandlerFunc_t *NewNetflowHandlerV5();
 int FreeNetflowHandlerV5(NetflowHandlerFunc_t *this);
 

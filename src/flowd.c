@@ -456,7 +456,7 @@ int main(int argc, char *argv[])
 		    preHour = localtm.tm_hour;
 		}
 
-		AddFlowData(buf, n);
+                AddFlowData(buf, n, &pin);
 	    }
 	    else if (multiplexer->IsActive(multiplexer, flowdSockFd))
 	    {

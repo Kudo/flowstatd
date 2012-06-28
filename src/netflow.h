@@ -30,7 +30,7 @@ struct _NetflowHandlerFunc_t {
     int (*Init)(NetflowHandlerFunc_t *this);
     int (*UnInit)(NetflowHandlerFunc_t *this);
 
-    int (*AddFlowData)(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen);
+    int (*AddFlowData)(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr);
 };
 
 typedef struct _NfTimeInfo_t {
@@ -45,7 +45,7 @@ typedef struct _NfTimeInfo_t {
 
 int NetflowHandlerInit();
 int NetflowHandlerUnInit();
-int AddFlowData(const char *packetBuf, int packetLen);
+int AddFlowData(const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr);
 inline int getIPIdx(in_addr_t ipaddr);
 void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets);
 struct tm ConvertNfTime(NfTimeInfo_t *nfTimeInfo);

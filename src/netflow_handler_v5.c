@@ -87,7 +87,7 @@ static void InsertFlowEntry(const char *packetBuf, int recCount)
     }
 }
 
-int AddFlowDataV5Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen)
+int AddFlowDataV5Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr)
 {
     //NetflowHandlerV5_t *nfHandler = (NetflowHandlerV5_t *)this;
     int recCount = IsValidPacket(packetBuf, packetLen);

@@ -26,12 +26,15 @@
 #include "netflow_handler_v9.h"
 
 static struct NF_V9_template_table_entry *g_templateTable = NULL;
+static struct NF_V9_source_table_entry *g_sourceTable = NULL;
 
 int NfHandlerInitV9Impl(NetflowHandlerFunc_t *this)
 {
     //NetflowHandlerV9_t *nfHandler = (NetflowHandlerV9_t *)this;
     g_templateTable = (struct NF_V9_template_table_entry *) malloc(sizeof(struct NF_V9_template_table_entry) * NF_V9_MAX_TEMPLATES);
+    g_sourceTable = (struct NF_V9_source_table_entry *) malloc(sizeof(struct NF_V9_source_table_entry) * NF_V9_MAX_SOURCE_ENTRIES);
     memset(g_templateTable, 0, sizeof(struct NF_V9_template_table_entry) * NF_V9_MAX_TEMPLATES);
+    memset(g_sourceTable, 0, sizeof(struct NF_V9_source_table_entry) * NF_V9_MAX_SOURCE_ENTRIES);
     return 1;
 }
 
@@ -39,104 +42,180 @@ int NfHandlerUnInitV9Impl(NetflowHandlerFunc_t *this)
 {
     //NetflowHandlerV9_t *nfHandler = (NetflowHandlerV9_t *)this;
     if (g_templateTable != NULL) { free(g_templateTable); g_templateTable = NULL; }
+    if (g_sourceTable != NULL) { free(g_sourceTable); g_sourceTable = NULL; }
     return 1;
 }
 
 static int _HashingTemplateId(int templateId)
 {
-    // Simple hasing here, we don't support templateId large than NF_V9_MAX_TEMPLATES currently.
-    return (templateId - 256) % NF_V9_MAX_TEMPLATES;
+    // Simple hasing here, we don't support templateId large than NF_V9_TEMPLATES_PER_SOURCE currently.
+    return (templateId - 256) % NF_V9_TEMPLATES_PER_SOURCE;
 }
 
-static int _SaveTemplate(struct NF_V9_template_header *templateHeader)
+static int _HashingSourceInfo(in_addr_t sourceIp, uint32_t sourceId)
 {
-    int templateId = _HashingTemplateId(ntohs(templateHeader->template_id));
+    // [0] Cantor pairing function
+    unsigned long long key = (sourceIp + sourceId) * (sourceIp + sourceId + 1) / 2 + sourceId;
+
+    // Ref: http://elliottback.com/wp/hashmap-implementation-in-c/
+    // [1] Robert Jenkins 32 bit Mix Function
+    key += (key << 12);
+    key ^= (key >> 22);
+    key += (key << 4);
+    key ^= (key >> 9);
+    key += (key << 10);
+    key ^= (key >> 2);
+    key += (key << 7);
+    key ^= (key >> 12);
+
+    // [2] Knuth's Multiplicative Hash
+    key = (key >> 3) * 2654435761UL;
+
+    return key % NF_V9_MAX_SOURCE_ENTRIES;
+}
+
+static int _SaveTemplate(struct sockaddr_in *sourceAddr, uint32_t sourceId, struct NF_V9_template_header *templateHeader)
+{
+    int sourceOffset = _HashingSourceInfo(sourceAddr->sin_addr.s_addr, sourceId);
+    int templateOffset = _HashingTemplateId(ntohs(templateHeader->template_id));
+    int templateId = sourceOffset * NF_V9_TEMPLATES_PER_SOURCE + templateOffset;
     int fieldsCount = ntohs(templateHeader->field_count);
     int currField = 0;
+
+    // [0] Collison check
+    if (g_sourceTable[sourceOffset].templatePtr != NULL)
+    {
+	if (g_sourceTable[sourceOffset].sourceIp != sourceAddr->sin_addr.s_addr ||
+	    g_sourceTable[sourceOffset].sourceId != sourceId)
+	{
+	    printf("##### source collison ##### g_sourceTable[sourceOffset].sourceIp[%d] sourceIp[%d] g_sourceTable[sourceOffset].sourceId[%d] sourceId[%d]\n",
+		    g_sourceTable[sourceOffset].sourceIp,
+		    sourceAddr->sin_addr.s_addr,
+		    g_sourceTable[sourceOffset].sourceId,
+		    sourceId);
+	}
+    }
+    else
+    {
+	g_sourceTable[sourceOffset].sourceIp = sourceAddr->sin_addr.s_addr;
+	g_sourceTable[sourceOffset].sourceId = sourceId;
+	g_sourceTable[sourceOffset].templatePtr = &(g_templateTable[templateId]);
+    }
+    /*
+    printf("_SaveTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]\n", templateId, sourceOffset, templateOffset, fieldsCount);
+    {
+        char ip[17];
+
+        inet_ntop(PF_INET, (void *) &sourceAddr->sin_addr, ip, 16);
+	printf("_SaveTemplate. sourceIp[%s] sourceId[%d] templateId[%d]\n", ip, sourceId, ntohs(templateHeader->template_id));
+    }
+    */
     g_templateTable[templateId].template_type = NF_V9_TEMPLATE_TYPE_TEMPLATE;
-    g_templateTable[templateId].field_count = fieldsCount;
-    for (currField = 0; currField < fieldsCount; ++currField)
+    g_templateTable[templateId].field_count = (fieldsCount > NF_V9_MAX_FIELDS_IN_TEMPLATE) ? NF_V9_MAX_FIELDS_IN_TEMPLATE : fieldsCount;
+    g_templateTable[templateId].record_length = 0;
+    for (currField = 0; currField < g_templateTable[templateId].field_count; ++currField)
     {
 	struct NF_V9_flowset_record *flowSetRecord = (struct NF_V9_flowset_record *) (((char *)templateHeader) + sizeof(struct NF_V9_template_header) + currField * sizeof(struct NF_V9_flowset_record));
 	g_templateTable[templateId].fields[currField].type = ntohs(flowSetRecord->type);
 	g_templateTable[templateId].fields[currField].length = ntohs(flowSetRecord->length);
+	g_templateTable[templateId].record_length += g_templateTable[templateId].fields[currField].length;
     }
-    return 1;
+    return sizeof(struct NF_V9_template_header) + currField * sizeof(struct NF_V9_flowset_record);
 }
 
-static int _HandleData(struct NF_V9_header *nfHeader, const char *dataBegin, int dataLen)
+static int _HandleData(struct sockaddr_in *sourceAddr, uint32_t sourceId, struct NF_V9_header *nfHeader, struct NF_V9_flowset_header *flowSetHeader)
 {
-    struct NF_V9_flowset_header *flowSetHeader = (struct NF_V9_flowset_header *) (((char *) nfHeader) + sizeof(struct NF_V9_header));
-    int templateId = _HashingTemplateId(ntohs(flowSetHeader->flowset_id));
+    const char *dataBegin = (const char *) (((char *) flowSetHeader) + sizeof(struct NF_V9_flowset_header));
+    int dataLen = ntohs(flowSetHeader->length);
+    int sourceOffset = _HashingSourceInfo(sourceAddr->sin_addr.s_addr, sourceId);
+    int templateOffset = _HashingTemplateId(ntohs(flowSetHeader->flowset_id));
+    int templateId = sourceOffset * NF_V9_TEMPLATES_PER_SOURCE + templateOffset;
     int currPos = 0;
-    int currField = 0;
     int fieldCount = g_templateTable[templateId].field_count;
-    in_addr_t srcAddr = 0;
-    in_addr_t dstAddr = 0;
-    unsigned int flowBytes = 0;
     struct NF_V9_flowset_record *fields = g_templateTable[templateId].fields;
 
-    NfTimeInfo_t nfTimeInfo;
-    nfTimeInfo.SysUptime = ntohl(nfHeader->SysUptime);
-    nfTimeInfo.UnixSecs = ntohl(nfHeader->unix_secs);
-    nfTimeInfo.UnixNsecs = 0;
-
-    if (g_templateTable[templateId].template_type == NF_V9_TEMPLATE_TYPE_NONE)
-    {
-	printf("No template data\n");
-	return 0;
-    }
-    while (currField < fieldCount && currPos < dataLen)
-    {
-	switch (fields[currField].type)
-	{
-	    case NF_V9_FIELD_TYPE_IPV4_SRC_ADDR:
-		{
-		    srcAddr = *((in_addr_t *) (dataBegin + currPos));
-		}
-		break;
-	    case NF_V9_FIELD_TYPE_IPV4_DST_ADDR:
-		{
-		    dstAddr = *((in_addr_t *) (dataBegin + currPos));
-		}
-		break;
-	    case NF_V9_FIELD_TYPE_IN_BYTES:
-		{
-		    if (fields[currField].length == 4)
-			flowBytes = ntohl(*((uint32_t *)(dataBegin + currPos)));
-		    else if (fields[currField].length == 2)
-			flowBytes = ntohs(*((uint16_t *)(dataBegin + currPos)));
-		    else
-			printf("********** byteLength[%d] ***********\n", fields[currField].length);
-		}
-		break;
-	    case NF_V9_FIELD_TYPE_FIRST_SWITCHED:
-		{
-		    nfTimeInfo.FirstPacketTime = ntohl(*((uint32_t *)(dataBegin + currPos)));
-		}
-		break;
-	}
-	++currField;
-	currPos += fields[currField].length;
-    }
-
-    if (srcAddr != 0 && dstAddr != 0 && flowBytes != 0 && nfTimeInfo.FirstPacketTime != 0)
-    {
-	InsertNfInfoToIpTable(srcAddr, dstAddr, flowBytes, &nfTimeInfo);
-    }
     /*
-    else
+    printf("_UseTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]\n", templateId, sourceOffset, templateOffset, fieldCount);
     {
-	printf("------------------- No enough info. ----------------------\n");
+        char ip[17];
+
+        inet_ntop(PF_INET, (void *) &sourceAddr->sin_addr, ip, 16);
+	printf("_UseTemplate. sourceIp[%s] sourceId[%d] templateId[%d]\n", ip, sourceId, ntohs(flowSetHeader->flowset_id));
     }
     */
 
+    if (g_templateTable[templateId].template_type == NF_V9_TEMPLATE_TYPE_NONE)
+    {
+	//printf("No template data\n");
+	return 0;
+    }
+    while (currPos + g_templateTable[templateId].record_length < dataLen)
+    {
+	int currField = 0;
+	in_addr_t srcAddr = 0;
+	in_addr_t dstAddr = 0;
+	unsigned int flowBytes = 0;
+
+	NfTimeInfo_t nfTimeInfo;
+	nfTimeInfo.SysUptime = ntohl(nfHeader->SysUptime);
+	nfTimeInfo.UnixSecs = ntohl(nfHeader->unix_secs);
+	nfTimeInfo.UnixNsecs = 0;
+
+	for (currField = 0; currField < fieldCount; ++currField)
+	{
+	    switch (fields[currField].type)
+	    {
+		case NF_V9_FIELD_TYPE_IPV4_SRC_ADDR:
+		    {
+			srcAddr = *((in_addr_t *) (dataBegin + currPos));
+		    }
+		    break;
+		case NF_V9_FIELD_TYPE_IPV4_DST_ADDR:
+		    {
+			dstAddr = *((in_addr_t *) (dataBegin + currPos));
+		    }
+		    break;
+		case NF_V9_FIELD_TYPE_IPV6_SRC_ADDR:
+		case NF_V9_FIELD_TYPE_IPV6_DST_ADDR:
+		    {
+		    }
+		    break;
+		case NF_V9_FIELD_TYPE_IN_BYTES:
+		    {
+			if (fields[currField].length == 4)
+			    flowBytes = ntohl(*((uint32_t *)(dataBegin + currPos)));
+			else if (fields[currField].length == 2)
+			    flowBytes = ntohs(*((uint16_t *)(dataBegin + currPos)));
+			else
+			    printf("********** byteLength[%d] ***********\n", fields[currField].length);
+		    }
+		    break;
+		case NF_V9_FIELD_TYPE_FIRST_SWITCHED:
+		    {
+			nfTimeInfo.FirstPacketTime = ntohl(*((uint32_t *)(dataBegin + currPos)));
+		    }
+		    break;
+	    }
+	    currPos += fields[currField].length;
+	}
+
+	if (srcAddr != 0 && dstAddr != 0 && flowBytes != 0 && nfTimeInfo.FirstPacketTime != 0)
+	{
+	    InsertNfInfoToIpTable(srcAddr, dstAddr, flowBytes, &nfTimeInfo);
+	}
+	else
+	{
+	    // printf("------------------- No enough info. srcAddr[%x] dstAddr[%x] flowBytes[%d] nfTimeInfo.FirstPacketTime[%d]\n", srcAddr, dstAddr, flowBytes, nfTimeInfo.FirstPacketTime);
+	}
+    }
+
     return 1;
 }
 
-static void _InsertFlowEntry(const char *packetBuf, int packetLen)
+static void _InsertFlowEntry(const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr)
 {
     unsigned int flowSetPos = sizeof(struct NF_V9_header);
+    struct NF_V9_header *flowHeader = (struct NF_V9_header *) (packetBuf);
 
     while (flowSetPos < packetLen)
     {
@@ -145,26 +224,32 @@ static void _InsertFlowEntry(const char *packetBuf, int packetLen)
 	if (flowSetId == 0)
 	{
 	    // Template
-	    struct NF_V9_template_header *templateHeader = (struct NF_V9_template_header *) (((char *) flowSetHeader) + sizeof(struct NF_V9_flowset_header));
-	    _SaveTemplate(templateHeader);
-	} else if (flowSetId == 1)
+	    int offset = 0;
+	    int flowSetLen = ntohs(flowSetHeader->length) - 4;
+	    while (offset < flowSetLen)
+	    {
+		struct NF_V9_template_header *templateHeader = (struct NF_V9_template_header *) (((char *) flowSetHeader) + sizeof(struct NF_V9_flowset_header) + offset);
+		offset += _SaveTemplate(sourceAddr, ntohl(flowHeader->source_id), templateHeader);
+	    }
+	}
+	else if (flowSetId == 1)
 	{
 	    // Options Template
 	    // TODO: Add if need
-	} else if (flowSetId > 255)
+	}
+	else if (flowSetId > 255)
 	{
 	    // Data
-	    const char *dataBegin = (const char *) (((char *) flowSetHeader) + sizeof(struct NF_V9_flowset_header));
-	    _HandleData((struct NF_V9_header *) packetBuf, dataBegin, ntohs(flowSetHeader->length));
+	    _HandleData(sourceAddr, ntohl(flowHeader->source_id), (struct NF_V9_header *) packetBuf, flowSetHeader);
 	}
 	flowSetPos += ntohs(flowSetHeader->length);
     }
 }
 
-int AddFlowDataV9Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen)
+int AddFlowDataV9Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr)
 {
     //NetflowHandlerV9_t *nfHandler = (NetflowHandlerV9_t *)this;
-    _InsertFlowEntry(packetBuf, packetLen);
+    _InsertFlowEntry(packetBuf, packetLen, sourceAddr);
     return 1;
 }
 

@@ -168,7 +168,9 @@ struct NF_V9_options_template_header
 
 /* Constant Definitions */
 #define NF_V9_MAX_FIELDS_IN_TEMPLATE		128
-#define NF_V9_MAX_TEMPLATES			16
+#define NF_V9_MAX_SOURCE_ENTRIES		64
+#define NF_V9_TEMPLATES_PER_SOURCE		64
+#define NF_V9_MAX_TEMPLATES			(NF_V9_TEMPLATES_PER_SOURCE * NF_V9_MAX_SOURCE_ENTRIES)
 
 #define NF_V9_TEMPLATE_TYPE_NONE		0
 #define NF_V9_TEMPLATE_TYPE_TEMPLATE		1
@@ -176,9 +178,16 @@ struct NF_V9_options_template_header
 
 /* Data Type Definitions */
 struct NF_V9_template_table_entry {
-  uint16_t template_type;
-  uint16_t field_count;
-  struct NF_V9_flowset_record fields[NF_V9_MAX_FIELDS_IN_TEMPLATE];
+    uint16_t template_type;
+    uint16_t field_count;
+    uint16_t record_length;
+    struct NF_V9_flowset_record fields[NF_V9_MAX_FIELDS_IN_TEMPLATE];
+};
+
+struct NF_V9_source_table_entry {
+    in_addr_t sourceIp;
+    uint32_t sourceId;
+    struct NF_V9_template_table_entry *templatePtr;
 };
 
 typedef struct _NetflowHandlerV9_t {
@@ -187,7 +196,7 @@ typedef struct _NetflowHandlerV9_t {
 
 int NfHandlerInitV9Impl(NetflowHandlerFunc_t *this);
 int NfHandlerUnInitV9Impl(NetflowHandlerFunc_t *this);
-int AddFlowDataV9Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen);
+int AddFlowDataV9Impl(NetflowHandlerFunc_t *this, const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr);
 NetflowHandlerFunc_t *NewNetflowHandlerV9();
 int FreeNetflowHandlerV9(NetflowHandlerFunc_t *this);
 

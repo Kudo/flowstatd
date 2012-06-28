@@ -49,7 +49,7 @@ int NetflowHandlerUnInit()
     return 1;
 }
 
-int AddFlowData(const char *packetBuf, int packetLen)
+int AddFlowData(const char *packetBuf, int packetLen, struct sockaddr_in *sourceAddr)
 {
     uint16_t *version = (uint16_t *) packetBuf;
     NetflowHandlerFunc_t *nfHandler = NULL;
@@ -68,7 +68,7 @@ int AddFlowData(const char *packetBuf, int packetLen)
 	    break;
     }
 
-    nfHandler->AddFlowData(nfHandler, packetBuf, packetLen);
+    nfHandler->AddFlowData(nfHandler, packetBuf, packetLen, sourceAddr);
 
     return 1;
 }
@@ -141,7 +141,6 @@ int InsertNfInfoToIpTable(in_addr_t srcAddr, in_addr_t dstAddr, unsigned int flo
     int dstIPIdx = getIPIdx(dstAddr);
     struct tm tmTime = ConvertNfTime(nfTimeInfo);
 
-    displayFlowEntry(srcAddr, dstAddr, flowBytes);
     if (srcIPIdx >= 0 && dstIPIdx == RET_NOT_IN_MYNET)
     {
 	if (tmTime.tm_mday == localtm.tm_mday)
