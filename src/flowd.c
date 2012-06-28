@@ -161,7 +161,7 @@ int ImportRecord(char *fname)
 	if ((ptr = realloc(ipTable, sizeof(struct hostflow) * tmpVal)) == NULL)
 	{
 	    free(ipTable);
-	    fprintf(stderr, "Failed to reallocate memory %d bytes\n", sizeof(struct hostflow) * tmpVal);
+	    fprintf(stderr, "Failed to reallocate memory %lu bytes\n", sizeof(struct hostflow) * tmpVal);
 	    exit(EXIT_FAILURE);
 	}
 	ipTable = ptr;
@@ -371,7 +371,7 @@ int main(int argc, char *argv[])
     ipTable = (struct hostflow *) malloc(sizeof(struct hostflow) * sumIpCount);
     if (ipTable == NULL)
     {
-	fprintf(stderr, "Failed to allocate memory %d bytes\n", sizeof(struct hostflow) * sumIpCount);
+	fprintf(stderr, "Failed to allocate memory %lu bytes\n", sizeof(struct hostflow) * sumIpCount);
 	return -1;
     }
     memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);

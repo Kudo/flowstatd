@@ -19,10 +19,21 @@ flowd is a Netflow statistics service provides these features:
 
 3. How To
 ---------------------
+Requirements:
+- cmake
+- zlib
+
+Build:
 ```
-cd src
-make
-cd ../bin
+cd /path/to/flowd
+mkdir build
+cmake ..
+make install
+```
+
+Usage:
+```
+cd /path/to/flowd/bin
 ./flowd [-i listen_ip_address] -p <netflow_export_to_which_port> [-P flowd_command_port]
 ```
 
