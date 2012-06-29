@@ -38,7 +38,7 @@
 
 #define	DEF_SAVE_PREFIX		"../data"
 #define	DEF_SUBNET_FILE		"../etc/subnet.conf"
-#define	DEF_WHITELIST		"../etc/whitelist"
+#define	DEF_WHITELIST		"../etc/whitelist.json"
 #define NETFLOW_LISTEN_PORT	9991
 #define FLOWD_LISTEN_PORT	9000
 #define	SECRET_KEY		"secret"

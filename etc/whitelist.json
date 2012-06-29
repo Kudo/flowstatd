@@ -1,0 +1,11 @@
+{
+    "__comments__": {
+	"File": "Whitelist setting - IP in this list which flow will be 0 in default",
+	"Format": "IP addresses in 'data' JSON array"
+    },
+
+    "data": [
+	"0.0.0.0",
+	"0.0.0.1"
+    ]
+}

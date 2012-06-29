@@ -29,6 +29,7 @@
 #include <arpa/inet.h>
 #include <zlib.h>
 #include "flowd.h"
+#include "jansson.h"
 #include "command.h"
 #include "multiplex.h"
 #include "netflow.h"
@@ -62,22 +63,41 @@ static void SetSavePrefix(char *dir)
 
 static int LoadWhitelist(char *fname)
 {
-    int i = 0, j;
-    FILE *fp;
-    char buf[20];
+    int i = 0;
+    int j = 0;
+    int length = 0;
+    int ret = -1;
     in_addr_t addr;
+    json_t *jsonRoot = NULL;
+    json_t *jsonData = NULL;
+    json_error_t jsonError = {0};
+
+    jsonRoot = json_load_file(fname, 0, &jsonError);
+    if (jsonRoot == NULL) {
+	fprintf(stderr, "Unable to parse whitelist file. fname[%s] jsonErr[%s@%d]\n", fname, jsonError.text, jsonError.line);
+	exit(EXIT_FAILURE);
+    }
+    if (!json_is_object(jsonRoot)) {
+	fprintf(stderr, "Invalid file format\n");
+	goto Exit;
+    }
+    jsonData = json_object_get(jsonRoot, "data");
+    if (jsonData == NULL || !json_is_array(jsonData)) {
+	fprintf(stderr, "Invalid file format\n");
+	goto Exit;
+    }
 
     memset(whitelist, 0, sizeof(in_addr_t) * MAX_WHITELIST);
 
-    if ((fp = fopen(whitelistFile, "r")) == NULL)
-    {
-	fprintf(stderr, "Open whitelist file %s failed: %s\n", whitelistFile, strerror(errno));
-	exit(EXIT_FAILURE);
-    }
+    length = json_array_size(jsonData);
+    for (i = 0; i < MAX_WHITELIST && i < length; ++i) {
+	json_t *hostValue = json_array_get(jsonData, i);
+	if (!json_is_string(hostValue)) {
+	    //fprintf(stderr, "Invalid file format\n");
+	    continue;
+	}
 
-    while (i < MAX_WHITELIST && ((fgets(buf, 19, fp)) != NULL))
-    {
-	if ((addr = inet_addr(buf)) == INADDR_NONE)
+	if ((addr = inet_addr(json_string_value(hostValue))) == INADDR_NONE)
 	    continue;
 	
 	for (j = 0; j < (int) nSubnet; ++j)
@@ -86,10 +106,11 @@ static int LoadWhitelist(char *fname)
 		whitelist[i++] = addr;
 	}
     }
+    ret = i;
 
-    fclose(fp);
-
-    return i;
+Exit:
+    if (jsonRoot != NULL) { json_decref(jsonRoot); }
+    return ret;
 }
 
 
