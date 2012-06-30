@@ -40,9 +40,8 @@ int flowdSockFd;
 int peerFd;
 MultiplexerFunc_t *multiplexer;
 
-char savePrefix[100];
-static char subnetFile[100];
-static char whitelistFile[100];
+char savePrefix[100] = {0};
+static char configFile[100];
 
 static void SetSavePrefix(char *dir)
 {
@@ -81,7 +80,7 @@ static int LoadWhitelist(char *fname)
 	fprintf(stderr, "Invalid file format\n");
 	goto Exit;
     }
-    jsonData = json_object_get(jsonRoot, "data");
+    jsonData = json_object_get(jsonRoot, "whitelistIps");
     if (jsonData == NULL || !json_is_array(jsonData)) {
 	fprintf(stderr, "Invalid file format\n");
 	goto Exit;
@@ -198,7 +197,7 @@ int ImportRecord(char *fname)
 
 static void Update(int s)
 {
-    LoadWhitelist(whitelistFile);
+    LoadWhitelist(configFile);
 
     if (fork() == 0)
     {
@@ -212,61 +211,122 @@ static void Update(int s)
 
 static void Usage(char *progName)
 {
-    printf("Usage: %s [-v] [-i listen_ip] [-p netflow_listen_port] [-P flowd_listen_port] [-w whitelist_file] [-s save_data_path]\n", progName);
+    printf("Usage: %s [-v] [-i listen_ip] [-f /path/to/config.json] [-p netflow_listen_port] [-P flowd_listen_port]\n", progName);
     exit(EXIT_SUCCESS);
 }
 
-static int LoadSubnet(char *fname)
+static int LoadConfig(char *fname)
 {
-    FILE *fp;
-    char buf[100];
-    char *ipPtr, *maskPtr;
-    uint nSubnet = 0;
-    in_addr_t addr;
-    int maskBits;
+    int nSubnet = 0;
+    int length = 0;
+    int i = 0;
+    json_t *jsonRoot = NULL;
+    json_t *jsonData = NULL;
+    json_error_t jsonError = {0};
 
-    memset(&myNet, 0, sizeof(struct subnet));
+    jsonRoot = json_load_file(fname, 0, &jsonError);
+    if (jsonRoot == NULL) {
+	fprintf(stderr, "Unable to parse config file. fname[%s] jsonErr[%s@%d]\n", fname, jsonError.text, jsonError.line);
+	exit(EXIT_FAILURE);
+    }
+    if (!json_is_object(jsonRoot)) {
+	fprintf(stderr, "Invalid file format.\n");
+	goto Exit;
+    }
 
-    if ((fp = fopen(fname, "r")) == NULL)
-	Diep("fopen in LoadSubnet() error");
-
-    while (fgets(buf, 99, fp) && nSubnet < MAX_SUBNET)
+    // [0] dataDir
+    jsonData = json_object_get(jsonRoot, "dataDir");
+    if (jsonData == NULL || !json_is_string(jsonData)) {
+	fprintf(stderr, "dataDir is missing.\n");
+	goto Exit;
+    }
+    strncpy(savePrefix, json_string_value(jsonData), sizeof(savePrefix) - 1);
     {
-	if (buf[0] == '#' || buf[0] == '\n')	// Skip mark and empty line
+	struct stat st;
+	if (stat(savePrefix, &st) == -1) {
+	    fprintf(stderr, "stat() failed. savePrefix[%s] error[%s].\n", savePrefix, strerror(errno));
+	    goto Exit;
+	}
+	if (!(st.st_mode & S_IFDIR)) {
+	    fprintf(stderr, "dataDir path is not directory. savePrefix[%s].\n", savePrefix);
+	    goto Exit;
+	}
+	if (access(savePrefix, R_OK | W_OK | W_OK) == -1) {
+	    fprintf(stderr, "dataDir path is not accesable. savePrefix[%s]. error[%s]\n", savePrefix, strerror(errno));
+	    goto Exit;
+	}
+    }
+
+    // [1] myNetwork
+    memset(&myNet, 0, sizeof(struct subnet));
+    jsonData = json_object_get(jsonRoot, "myNetwork");
+    if (jsonData == NULL || !json_is_string(jsonData)) {
+	fprintf(stderr, "myNetwork is missing.\n");
+	goto Exit;
+    }
+    {
+	char buf[BUFSIZE] = {0};
+	char *ipPtr = NULL, *maskPtr = NULL;
+	in_addr_t addr;
+	int maskBits = 0;
+	strncpy(buf, json_string_value(jsonData), sizeof(buf) - 1);
+
+	if ((ipPtr = strtok(buf, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL ||
+	    (addr = inet_addr(ipPtr)) == INADDR_NONE) {
+	    fprintf(stderr, "Invalid myNetwork format.\n");
+	    goto Exit;
+	}
+
+	maskBits = (uint) strtoul(maskPtr, (char **) NULL, 10);
+	if (maskBits < 1 && maskBits > 32) {
+	    fprintf(stderr, "Invalid myNetwork format.\n");
+	    goto Exit;
+	}
+
+	myNet.net = addr;
+	myNet.mask = 0xffffffff << (32 - maskBits);
+	myNet.maskBits = (uchar) maskBits;
+	myNet.ipCount = (myNet.mask ^ 0xffffffff) + 1;
+	myNet.mask = htonl(myNet.mask);
+    }
+
+    // [2] statedNetworks
+    jsonData = json_object_get(jsonRoot, "statedNetworks");
+    if (jsonData == NULL || !json_is_array(jsonData)) {
+	fprintf(stderr, "statedNetworks is missing.\n");
+	goto Exit;
+    }
+
+    length = json_array_size(jsonData);
+    if (length > MAX_SUBNET) {
+	fprintf(stderr, "statedNetworks exceeds maximum numbers, please adjust MAX_SUBNET value..\n");
+	goto Exit;
+    }
+    for (i = 0; i < length; ++i) {
+	char buf[BUFSIZE] = {0};
+	char *ipPtr = NULL, *maskPtr = NULL;
+	in_addr_t addr;
+	int maskBits = 0;
+	json_t *netValue = NULL;
+
+	netValue = json_array_get(jsonData, i);
+	if (!json_is_string(netValue)) {
+	    fprintf(stderr, "Invalid statedNetworks format\n");
 	    continue;
+	}
+	strncpy(buf, json_string_value(netValue), sizeof(buf) - 1);
 
-	if (strncmp(buf, "MyNetwork=", 10) == 0)    // My Network
-	{
-	    char *ptr = buf + 10;
-
-	    if ((ipPtr = strtok(ptr, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL)
-		continue;
-
-	    if ((addr = inet_addr(ipPtr)) == INADDR_NONE)
-		continue;
-
-	    maskBits = (uint) strtoul(maskPtr, (char **) NULL, 10);
-	    if (maskBits < 1 && maskBits > 32)
-		continue;
-
-	    myNet.net = addr;
-	    myNet.mask = 0xffffffff << (32 - maskBits);
-	    myNet.maskBits = (uchar) maskBits;
-	    myNet.ipCount = (myNet.mask ^ 0xffffffff) + 1;
-	    myNet.mask = htonl(myNet.mask);
-
+	if ((ipPtr = strtok(buf, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL ||
+	    (addr = inet_addr(ipPtr)) == INADDR_NONE) {
+	    fprintf(stderr, "Invalid statedNetworks format.\n");
 	    continue;
 	}
 
-	if ((ipPtr = strtok(buf, "/\t\n ")) == NULL || (maskPtr = strtok(NULL, "/\t\n ")) == NULL)
-	    continue;
-
-	if ((addr = inet_addr(ipPtr)) == INADDR_NONE)
-	    continue;
-
 	maskBits = (uint) strtoul(maskPtr, (char **) NULL, 10);
-	if (maskBits < 1 && maskBits > 32)
+	if (maskBits < 1 && maskBits > 32) {
+	    fprintf(stderr, "Invalid statedNetworks format.\n");
 	    continue;
+	}
 
 	rcvNetList[nSubnet].net = addr;
 	rcvNetList[nSubnet].mask = 0xffffffff << (32 - maskBits);
@@ -278,8 +338,8 @@ static int LoadSubnet(char *fname)
 	++nSubnet;
     }
 
-    fclose(fp);
-
+Exit:
+    if (jsonRoot != NULL) { json_decref(jsonRoot); }
     return nSubnet;
 }
 
@@ -323,15 +383,13 @@ int main(int argc, char *argv[])
     daemonMode = 0;
     debug = 0;
     sumIpCount = 0;
-    strncpy(savePrefix, DEF_SAVE_PREFIX, 99);
-    strncpy(subnetFile, DEF_SUBNET_FILE, 99);
-    strncpy(whitelistFile, DEF_WHITELIST, 99);
+    strncpy(configFile, DEF_CONFIG_FILE, 99);
 
     bindIpAddr = INADDR_ANY;
     netflowBindPort = htons(NETFLOW_LISTEN_PORT);
     flowdBindPort = htons(FLOWD_LISTEN_PORT);
 
-    while ((ch = getopt(argc, argv, "i:p:P:s:vdDw:")) != -1)
+    while ((ch = getopt(argc, argv, "i:p:P:vdDf:")) != -1)
     {
 	switch ((char) ch)
 	{
@@ -355,7 +413,6 @@ int main(int argc, char *argv[])
 		    flowdBindPort = htons(FLOWD_LISTEN_PORT);
 		break;
 
-	    case 's':		/* Path prefix to store */
 		SetSavePrefix(optarg);
 		break;
 
@@ -371,12 +428,8 @@ int main(int argc, char *argv[])
 		daemonMode = 1;
 		break;
 
-	    case 'w':
-		strncpy(whitelistFile, optarg, 99);
-		break;
-
 	    case 'f':
-		strncpy(subnetFile, optarg, 99);
+		strncpy(configFile, optarg, 99);
 		break;
 
 	    case '?':
@@ -386,8 +439,10 @@ int main(int argc, char *argv[])
 	}
     }
 
-    nSubnet = LoadSubnet(subnetFile);
-    LoadWhitelist(whitelistFile);
+    nSubnet = LoadConfig(configFile);
+    if (nSubnet <= 0)
+	return -1;
+    LoadWhitelist(configFile);
 
     ipTable = (struct hostflow *) malloc(sizeof(struct hostflow) * sumIpCount);
     if (ipTable == NULL)
