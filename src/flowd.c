@@ -41,24 +41,8 @@ int peerFd;
 MultiplexerFunc_t *multiplexer;
 
 char savePrefix[100] = {0};
+char secretKey[256] = {0};
 static char configFile[100];
-
-static void SetSavePrefix(char *dir)
-{
-    struct stat st;
-
-    if (strlen(dir) > 99)
-	return;
-
-    if (stat(dir, &st) == -1)
-    {
-	Warn("stat() in SetSavePrefix() error");
-	return;
-    }
-
-    if (S_ISDIR(st.st_mode) && (access(dir, R_OK | W_OK | X_OK) == 0))
-	strncpy(savePrefix, dir, 99);
-}
 
 static int LoadWhitelist(char *fname)
 {
@@ -211,11 +195,11 @@ static void Update(int s)
 
 static void Usage(char *progName)
 {
-    printf("Usage: %s [-v] [-i listen_ip] [-f /path/to/config.json] [-p netflow_listen_port] [-P flowd_listen_port]\n", progName);
+    printf("Usage: %s [-v] [-f /path/to/config.json]\n", progName);
     exit(EXIT_SUCCESS);
 }
 
-static int LoadConfig(char *fname)
+static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindPort, uint16_t *flowdBindPort)
 {
     int nSubnet = 0;
     int length = 0;
@@ -247,11 +231,12 @@ static int LoadConfig(char *fname)
 	    fprintf(stderr, "stat() failed. savePrefix[%s] error[%s].\n", savePrefix, strerror(errno));
 	    goto Exit;
 	}
-	if (!(st.st_mode & S_IFDIR)) {
+
+	if (!(S_ISDIR(st.st_mode))) {
 	    fprintf(stderr, "dataDir path is not directory. savePrefix[%s].\n", savePrefix);
 	    goto Exit;
 	}
-	if (access(savePrefix, R_OK | W_OK | W_OK) == -1) {
+	if (access(savePrefix, R_OK | W_OK | X_OK) == -1) {
 	    fprintf(stderr, "dataDir path is not accesable. savePrefix[%s]. error[%s]\n", savePrefix, strerror(errno));
 	    goto Exit;
 	}
@@ -338,6 +323,37 @@ static int LoadConfig(char *fname)
 	++nSubnet;
     }
 
+    // [3] secretKey
+    jsonData = json_object_get(jsonRoot, "secretKey");
+    if (jsonData == NULL || !json_is_string(jsonData)) {
+	fprintf(stderr, "secretKey is missing.\n");
+	goto Exit;
+    }
+    strncpy(secretKey, json_string_value(jsonData), sizeof(secretKey) - 1);
+
+    // [4] listenIpAddr
+    jsonData = json_object_get(jsonRoot, "listenIpAddr");
+    if (jsonData != NULL && json_is_string(jsonData)) {
+	*bindIpAddr = inet_addr(json_string_value(jsonData));
+    }
+
+    // [5] netflowListenPort
+    jsonData = json_object_get(jsonRoot, "netflowListenPort");
+    if (jsonData == NULL || !json_is_integer(jsonData)) {
+	fprintf(stderr, "netflowListenPort is missing.\n");
+	goto Exit;
+    }
+    *netflowBindPort = htons(json_integer_value(jsonData));
+
+    // [6] flowdListenPort
+    jsonData = json_object_get(jsonRoot, "flowdListenPort");
+    if (jsonData == NULL || !json_is_integer(jsonData)) {
+	fprintf(stderr, "flowdListenPort is missing.\n");
+	goto Exit;
+    }
+    *flowdBindPort = htons(json_integer_value(jsonData));
+
+
 Exit:
     if (jsonRoot != NULL) { json_decref(jsonRoot); }
     return nSubnet;
@@ -373,9 +389,9 @@ int main(int argc, char *argv[])
     time_t now;
     char preHour;
 
-    in_addr_t bindIpAddr;
-    uint16_t netflowBindPort;
-    uint16_t flowdBindPort;
+    in_addr_t bindIpAddr = INADDR_ANY;
+    uint16_t netflowBindPort = 0;
+    uint16_t flowdBindPort = 0;
 
     int nev;
 
@@ -385,37 +401,10 @@ int main(int argc, char *argv[])
     sumIpCount = 0;
     strncpy(configFile, DEF_CONFIG_FILE, 99);
 
-    bindIpAddr = INADDR_ANY;
-    netflowBindPort = htons(NETFLOW_LISTEN_PORT);
-    flowdBindPort = htons(FLOWD_LISTEN_PORT);
-
-    while ((ch = getopt(argc, argv, "i:p:P:vdDf:")) != -1)
+    while ((ch = getopt(argc, argv, "vdDf:")) != -1)
     {
 	switch ((char) ch)
 	{
-	    case 'i':		/* Listen IP */
-		bindIpAddr = inet_addr(optarg);
-		break;
-
-	    case 'p':		/* Netflow Listen Port */
-		n = htons(atoi(optarg));
-		if (n > 0 && n < 65535)
-		    netflowBindPort = htons(atoi(optarg));
-		else
-		    netflowBindPort = htons(NETFLOW_LISTEN_PORT);
-		break;
-
-	    case 'P':		/* Flowd Listen Port */
-		n = htons(atoi(optarg));
-		if (n > 0 && n < 65535)
-		    flowdBindPort = htons(atoi(optarg));
-		else
-		    flowdBindPort = htons(FLOWD_LISTEN_PORT);
-		break;
-
-		SetSavePrefix(optarg);
-		break;
-
 	    case 'v':		/* Verbose mode */
 		verbose = 1;
 		break;
@@ -439,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    nSubnet = LoadConfig(configFile);
+    nSubnet = LoadConfig(configFile, &bindIpAddr, &netflowBindPort, &flowdBindPort);
     if (nSubnet <= 0)
 	return -1;
     LoadWhitelist(configFile);

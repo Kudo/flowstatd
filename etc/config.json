@@ -1,6 +1,10 @@
 {
     "dataDir": "/data/flowd/data",
 
+    "netflowListenPort": 9992,
+    "flowdListenPort": 9993,
+    "secretKey": "secretKey",
+
     "myNetwork": "140.123.0.0/16",
 
     "statedNetworks": [

@@ -34,6 +34,7 @@
 
 extern int peerFd;
 extern char savePrefix[100];
+extern char *secretKey;
 
 static void GetByIP(json_t *jsonResp, const char *ipaddr, BOOL isShowAll)
 {
@@ -307,7 +308,7 @@ BOOL parseCmd(const char *_jsonData)
 
     // parse showAll
     jsonShowAll = json_object_get(jsonRoot, "showAll");
-    if (jsonShowAll && json_is_string(jsonShowAll) && strcmp(json_string_value(jsonShowAll), SECRET_KEY) == 0) {
+    if (jsonShowAll && json_is_string(jsonShowAll) && strcmp(json_string_value(jsonShowAll), secretKey) == 0) {
 	isShowAll = TRUE;
     }
 

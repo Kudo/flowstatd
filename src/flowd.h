@@ -42,7 +42,6 @@
 #define	DEF_CONFIG_FILE		"/etc/config.json"
 #define NETFLOW_LISTEN_PORT	9991
 #define FLOWD_LISTEN_PORT	9000
-#define	SECRET_KEY		"secret"
 
 #define	TODAY		0
 #define	YESTERDAY	1
