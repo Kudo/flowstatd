@@ -16,8 +16,8 @@ const char *const errMsgList[] = {
 };
 
 #define SET_JSON_RET_INFO(jsonResp, errorCode)   { \
-    json_object_set_new(jsonResp, "respCode", json_integer(errorCode)); \
-    json_object_set_new(jsonResp, "respMsg", json_string(errMsgList[errorCode])); \
+    json_object_set_new(jsonResp, "retCode", json_integer(errorCode)); \
+    json_object_set_new(jsonResp, "retMsg", json_string(errMsgList[errorCode])); \
 }
 
 #endif	// _ERROR_CODE_H_

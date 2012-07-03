@@ -542,6 +542,8 @@ int main(int argc, char *argv[])
 			if (length + n > sizeof(command) - 1) {
 			    fprintf(stderr, "Socket receiver exceeds maximum size\n");
 			    n = sizeof(command) - 1 - length;
+			    strncat(command + length, buf, n);
+			    break;
 			}
 			strncat(command + length, buf, n);
 			length += n;
