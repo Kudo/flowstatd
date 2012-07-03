@@ -544,11 +544,20 @@ int main(int argc, char *argv[])
 
 		if (fork() == 0)
 		{
+		    int length = 0;
+		    char command[BUFSIZE] = {0};
 		    signal(SIGALRM, &SockExit);
 		    alarm(30);
-
-		    n = recv(peerFd, buf, BUFSIZE, 0);
-		    parseCmd(buf);
+		    
+		    while ((n = recv(peerFd, buf, sizeof(buf) - 1, 0)) > 0) {
+			if (length + n > sizeof(command) - 1) {
+			    fprintf(stderr, "Socket receiver exceeds maximum size\n");
+			    n = sizeof(command) - 1 - length;
+			}
+			strncat(command + length, buf, n);
+			length += n;
+		    }
+		    parseCmd(command);
 		    exit(EXIT_SUCCESS);
 		}
 		close(peerFd);

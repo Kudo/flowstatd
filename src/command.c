@@ -94,6 +94,7 @@ static void GetByIP(json_t *jsonResp, const char *ipaddr, BOOL isShowAll)
 	    json_object_set_new(jsonDataEntity, "total", json_real(((double) (ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES));
 	    json_object_set_new(jsonDataEntity, "incrementalTotal", json_real(((double) (totalFlow)) / MBYTES));
 	}
+	json_array_append_new(jsonData, jsonDataEntity);
     }
     json_object_set_new(jsonResp, "data", jsonData);
     jsonData = NULL;
@@ -168,6 +169,7 @@ static void GetByFlow(json_t *jsonResp, uint overMB, BOOL isShowAll)
     }
     json_object_set_new(jsonResp, "data", jsonData);
     jsonData = NULL;
+    SET_JSON_RET_INFO(jsonResp, S_OK);
 
 Exit:
     if (jsonData != NULL) { json_decref(jsonData); }
@@ -225,6 +227,7 @@ static void GetByTopN(json_t *jsonResp, uint topN, BOOL isShowAll)
     }
     json_object_set_new(jsonResp, "data", jsonData);
     jsonData = NULL;
+    SET_JSON_RET_INFO(jsonResp, S_OK);
 
 Exit:
     if (jsonData != NULL) { json_decref(jsonData); }
@@ -290,7 +293,7 @@ BOOL parseCmd(const char *_jsonData)
 	    ret = FALSE;
 	    goto Exit;
 	}
-	snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, tm.tm_year, tm.tm_mon, tm.tm_mday);
+	snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 
 	if (ImportRecord(buf) == 0) {
 	    SET_JSON_RET_INFO(jsonResp, E_NO_DATA);
@@ -298,8 +301,8 @@ BOOL parseCmd(const char *_jsonData)
 	    goto Exit;
 	}
 
-	snprintf(buf, BUFSIZE - 1, "%04d-%02d-%02d", tm.tm_year, tm.tm_mon, tm.tm_mday);
-	json_object_set_new(jsonResp, "datetime", json_string(buf));
+	snprintf(buf, BUFSIZE - 1, "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+	json_object_set_new(jsonResp, "date", json_string(buf));
     }
 
     // parse showAll
