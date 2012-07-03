@@ -25,6 +25,9 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#define TRUE		1
+#define FALSE		0
+
 //#define	MBYTES		1048576
 #define MBYTES		1000000
 #define	BUFSIZE		8192
@@ -36,12 +39,9 @@
 #define	DOWNLOAD	1
 #define	SUM		2
 
-#define	DEF_SAVE_PREFIX		"../data"
-#define	DEF_SUBNET_FILE		"../etc/subnet.conf"
-#define	DEF_WHITELIST		"../etc/whitelist"
+#define	DEF_CONFIG_FILE		"/etc/config.json"
 #define NETFLOW_LISTEN_PORT	9991
 #define FLOWD_LISTEN_PORT	9000
-#define	SECRET_KEY		"secret"
 
 #define	TODAY		0
 #define	YESTERDAY	1
@@ -56,6 +56,7 @@
  */
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef unsigned int BOOL;
 
 struct hostflow {
     struct in_addr sin_addr;

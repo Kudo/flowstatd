@@ -26,179 +26,83 @@
 #include <zlib.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include "jansson.h"
 #include "flowd.h"
 #include "socket.h"
 #include "netflow.h"
+#include "errorCode.h"
 
 extern int peerFd;
 extern char savePrefix[100];
+extern char *secretKey;
 
-static void GetOldByIP(int year, int month, int day, char *ipaddr, char realmode)
+static void GetByIP(json_t *jsonResp, const char *ipaddr, BOOL isShowAll)
 {
-    int i, j;
-    int isInSubnet;
-    unsigned long currSumIp = 0;
-    char buf[BUFSIZE];
-    gzFile fpZip;
-    struct hostflow ipFlow;
-    unsigned long long int totalFlow = 0;
-    in_addr_t ipaddr_in = inet_addr(ipaddr);
-
-    snprintf(buf, BUFSIZE - 1,"%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
-
-    if ((fpZip = gzopen(buf, "rb")) == NULL)
-    {
-	snprintf(buf, BUFSIZE - 1, "No data\n");
-	SendBufToSock(peerFd, buf, strlen(buf));
-	return;
-    }
-
-    gzread(fpZip, &isInSubnet, sizeof(isInSubnet));
-    gzread(fpZip, &nSubnet, sizeof(nSubnet));
-    gzread(fpZip, &isInSubnet, sizeof(isInSubnet));
-    gzread(fpZip, &sumIpCount, sizeof(sumIpCount));
-    gzread(fpZip, rcvNetList, sizeof(struct subnet) * nSubnet);
-
-    isInSubnet = -1;
-    for (i = 0; i < nSubnet; ++i)
-    {
-	if ((ipaddr_in & rcvNetList[i].mask) == rcvNetList[i].net)
-	{
-	    isInSubnet = i;
-	    currSumIp += (ipaddr_in & ~rcvNetList[i].mask) >> rcvNetList[i].maskBits;
-	    break;
-	}
-	else 
-	    currSumIp += rcvNetList[i].ipCount;
-    }
-
-    if (isInSubnet < 0)
-    {
-	snprintf(buf, BUFSIZE - 1, "No data\n");
-	SendBufToSock(peerFd, buf, strlen(buf));
-	return;
-    }
-
-    if (realmode == 0)
-    {
-	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	{
-	    if (ipaddr_in == whitelist[j])
-	    {
-		snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %4d-%02d-%02d\nSUM FLOW: %-12.6f (MB)\n", ipaddr, year, month, day, (double) 0);
-		strcat(buf, "-----------------------------------------------------------------------\n");
-		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
-		strcat(buf, "-----------------------------------------------------------------------\n");
-		SendBufToSock(peerFd, buf, strlen(buf));
-
-		for (i = 0; i < 24; i++)
-		{
-		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0, (double) 0);
-		    SendBufToSock(peerFd, buf, strlen(buf));
-		}
-		return;
-	    }
-	}
-    }
-
-    gzseek(fpZip, sizeof(struct hostflow) * currSumIp, SEEK_CUR);
-    gzread(fpZip, &ipFlow, sizeof(struct hostflow));
-
-    snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %4d-%02d-%02d\nSUM FLOW: %-12.6f (MB)\n", ipaddr, year, month, day,
-	    ((double) ipFlow.nflow[SUM]) / MBYTES);
-    strcat(buf, "-----------------------------------------------------------------------\n");
-    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
-    strcat(buf, "-----------------------------------------------------------------------\n");
-
-    SendBufToSock(peerFd, buf, strlen(buf));
-
-    for (i = 0; i < 24; i++)
-    {
-	totalFlow += ipFlow.hflow[i][UPLOAD] + ipFlow.hflow[i][DOWNLOAD];
-	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
-		((double) (ipFlow.hflow[i][UPLOAD])) / MBYTES,
-		((double) (ipFlow.hflow[i][DOWNLOAD])) / MBYTES,
-		((double) (ipFlow.hflow[i][UPLOAD] + ipFlow.hflow[i][DOWNLOAD])) / MBYTES,
-		((double) (totalFlow)) / MBYTES);
-	SendBufToSock(peerFd, buf, strlen(buf));
-    }
-
-    gzclose(fpZip);
-    return;
-}
-
-static void GetByIP(char *ipaddr, char realmode)
-{
-    int i, j;
-    int ipIdx;
+    int i = 0;
+    int ipIdx = 0;
     in_addr_t ipaddr_in;
-    char buf[BUFSIZE];
-    char time[20];
-    char isOurNet = 0;
+    BOOL isOurNet = FALSE;
+    BOOL isWhitelist = FALSE;
+    json_t *jsonData = json_array();
     unsigned long long int totalFlow = 0;
 
-    isOurNet = 0;
-    for (i = 0; i < (int) nSubnet; ++i)
-    {
-	if (((ipaddr_in = inet_addr(ipaddr)) & rcvNetList[i].mask) == rcvNetList[i].net)
-	{
-	    isOurNet = 1;
+    SET_JSON_RET_INFO(jsonResp, E_FAILED);
+
+    for (i = 0; i < (int) nSubnet; ++i) {
+	if (((ipaddr_in = inet_addr(ipaddr)) & rcvNetList[i].mask) == rcvNetList[i].net) {
+	    isOurNet = TRUE;
 	    break;
 	}
     }
-
-    if (isOurNet == 0)
-    {
-	SendBufToSock(peerFd, "No data\n", 8);
-	return;
+    if (isOurNet == FALSE) {
+	SET_JSON_RET_INFO(jsonResp, E_NO_DATA);
+	goto Exit;
     }
-
-    if (realmode == 0)
-    {
-	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	{
-	    if (ipaddr_in == whitelist[j])
-	    {
-		memset(&time, 0, sizeof(time));
-		strftime(time, sizeof(time) - 1, "%F %T", &localtm);
-		snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time, (double) 0);
-		strcat(buf, "-----------------------------------------------------------------------\n");
-		strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
-		strcat(buf, "-----------------------------------------------------------------------\n");
-		SendBufToSock(peerFd, buf, strlen(buf));
-
-		for (i = 0; i < 24; i++)
-		{
-		    snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i, (double) 0, (double) 0, (double) 0, (double) 0);
-		    SendBufToSock(peerFd, buf, strlen(buf));
-		}
-
-		return;
-	    }
-	}
-    }
-
     ipIdx = getIPIdx(ipaddr_in);
 
-    memset(&time, 0, sizeof(time));
-    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
-    snprintf(buf, BUFSIZE - 1, "IP: %s\nTime: %s\nSUM FLOW: %-12.6f (MB)\n", ipaddr, time,
-	    ((double) ipTable[ipIdx].nflow[SUM]) / MBYTES);
-    strcat(buf, "-----------------------------------------------------------------------\n");
-    strcat(buf, "HOUR    UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)        Total (MB)\n");
-    strcat(buf, "-----------------------------------------------------------------------\n");
-    SendBufToSock(peerFd, buf, strlen(buf));
-    for (i = 0; i < 24; i++)
-    {
+    // ip
+    json_object_set_new(jsonResp, "ip", json_string(ipaddr));
+
+    if (isShowAll == FALSE) {
+	int j = 0;
+	for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++) {
+	    if (ipaddr_in == whitelist[j]) {
+		isWhitelist = TRUE;
+		break;
+	    }
+	}
+    }
+
+    // total
+    if (isWhitelist)
+	json_object_set_new(jsonResp, "total", json_real(0));
+    else
+	json_object_set_new(jsonResp, "total", json_real(((double) ipTable[ipIdx].nflow[SUM]) / MBYTES));
+
+    for (i = 0; i < 24; i++) {
+	json_t *jsonDataEntity = json_object();
 	totalFlow += ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD];
 
-	snprintf(buf, BUFSIZE - 1, "%-2.2d\t%-12.6f\t%-12.6f\t%-12.6f\t%-12.6f\n", i,
-		((double) (ipTable[ipIdx].hflow[i][UPLOAD])) / MBYTES,
-		((double) (ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES,
-		((double) (ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES,
-		((double) (totalFlow)) / MBYTES);
-	SendBufToSock(peerFd, buf, strlen(buf));
+	json_object_set_new(jsonDataEntity, "hour", json_integer(i));
+	if (isWhitelist) {
+	    json_object_set_new(jsonDataEntity, "upload", json_real(0));
+	    json_object_set_new(jsonDataEntity, "download", json_real(0));
+	    json_object_set_new(jsonDataEntity, "total", json_real(0));
+	    json_object_set_new(jsonDataEntity, "incrementalTotal", json_real(0));
+	} else {
+	    json_object_set_new(jsonDataEntity, "upload", json_real(((double) ipTable[ipIdx].hflow[i][UPLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "download", json_real(((double) ipTable[ipIdx].hflow[i][DOWNLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "total", json_real(((double) (ipTable[ipIdx].hflow[i][UPLOAD] + ipTable[ipIdx].hflow[i][DOWNLOAD])) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "incrementalTotal", json_real(((double) (totalFlow)) / MBYTES));
+	}
+	json_array_append_new(jsonData, jsonDataEntity);
     }
+    json_object_set_new(jsonResp, "data", jsonData);
+    jsonData = NULL;
+    SET_JSON_RET_INFO(jsonResp, S_OK);
+
+Exit:
+    if (jsonData != NULL) { json_decref(jsonData); }
 }
 
 static int HostFlowCmp(const void *a, const void *b)
@@ -214,330 +118,258 @@ static int HostFlowCmp(const void *a, const void *b)
 	return -1;
 }
 
-static void GetByFlow(uint overMB, char realmode)
+static void GetByFlow(json_t *jsonResp, uint overMB, BOOL isShowAll)
 {
-    int i, j;
-    uint count = 0;
-    char buf[BUFSIZE];
-    char ip[17];
-    char show;
-    char time[20];
+    int i = 0;
+    uint rank = 0;
+    json_t *jsonData = json_array();
 
-    if (overMB <= 0)
-	return;
+    SET_JSON_RET_INFO(jsonResp, E_FAILED);
 
-    qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
-
-    memset(&time, 0, sizeof(time));
-    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
-    snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
-    strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSock(peerFd, buf, strlen(buf));
-
-    i = 0;
-    while ((ipTable[i].nflow[SUM] / MBYTES) >= overMB)
-    {
-	show = 1;
-	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), ip, 16);
-
-	if (realmode == 0)
-	{
-	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	    {
-		if (ipTable[i].sin_addr.s_addr == whitelist[j])
-		    show = 0;
-	    }
-	}
-
-	if (show == 1)
-	{
-	    snprintf(buf, BUFSIZE - 1, "%5u\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++count, ip,
-		    ((double) ipTable[i].nflow[UPLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSock(peerFd, buf, strlen(buf));
-	}
-	++i;
-    }
-}
-
-static void GetOldByFlow(int year, int month, int day, uint overMB, char realmode)
-{
-    int i, j;
-    uint count = 0;
-    char buf[BUFSIZE];
-    char ip[17];
-    char show;
-
-    if (overMB <= 0)
-	return;
-
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
-
-    if (ImportRecord(buf) == 0)
-    {
-	SendBufToSock(peerFd, "No data\n", 8);
-	return;
+    if (overMB <= 0) {
+	SET_JSON_RET_INFO(jsonResp, E_INVALID_PARAM);
+	goto Exit;
     }
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    snprintf(buf, BUFSIZE - 1, "Time: %4d-%02d-%02d\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", year, month, day);
-    strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSock(peerFd, buf, strlen(buf));
+    if (jsonData == NULL) {
+	fprintf(stderr, "Unable to create a new json data.\n");
+	goto Exit;
+    }
+
+    // overValue
+    json_object_set_new(jsonResp, "overValue", json_integer(overMB));
 
     i = 0;
-    while ((ipTable[i].nflow[SUM] / MBYTES) >= overMB)
-    {
-	show = 1;
+    while ((ipTable[i].nflow[SUM] / MBYTES) >= overMB) {
+	char ip[17] = {0};
+	BOOL isShow = TRUE;
 	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), ip, 16);
 
-	if (realmode == 0)
-	{
-	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	    {
-		if (ipTable[i].sin_addr.s_addr == whitelist[j])
-		    show = 0;
+	if (isShowAll == FALSE) {
+	    int j = 0;
+	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++) {
+		if (ipTable[i].sin_addr.s_addr == whitelist[j]) {
+		    isShow = FALSE;
+		    break;
+		}
 	    }
 	}
 
-	if (show == 1)
-	{
-	    snprintf(buf, BUFSIZE - 1, "%5u\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++count, ip,
-		    ((double) ipTable[i].nflow[UPLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSock(peerFd, buf, strlen(buf));
+	if (isShow) {
+	    json_t *jsonDataEntity = json_object();
+	    json_object_set_new(jsonDataEntity, "rank", json_integer(++rank));
+	    json_object_set_new(jsonDataEntity, "ip", json_string(ip));
+	    json_object_set_new(jsonDataEntity, "upload", json_real(((double) ipTable[i].nflow[UPLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "download", json_real(((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "total", json_real(((double) ipTable[i].nflow[SUM]) / MBYTES));
+	    json_array_append_new(jsonData, jsonDataEntity);
 	}
 	++i;
     }
+    json_object_set_new(jsonResp, "data", jsonData);
+    jsonData = NULL;
+    SET_JSON_RET_INFO(jsonResp, S_OK);
+
+Exit:
+    if (jsonData != NULL) { json_decref(jsonData); }
 }
 
-static void GetByTopN(uint topN, char realmode)
+static void GetByTopN(json_t *jsonResp, uint topN, BOOL isShowAll)
 {
-    int i, j;
-    uint count = 0;
-    char buf[BUFSIZE];
-    char ip[17];
-    char show;
-    char time[20];
+    int i = 0;
+    uint rank = 0;
+    json_t *jsonData = json_array();
 
-    if (topN <= 0 || topN >= sumIpCount)
-	return;
+    SET_JSON_RET_INFO(jsonResp, E_FAILED);
 
-    qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
-
-    memset(&time, 0, sizeof(time));
-    strftime(time, sizeof(time) - 1, "%F %T", &localtm);
-    snprintf(buf, BUFSIZE - 1, "Time: %s\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", time);
-    strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSock(peerFd, buf, strlen(buf));
-
-    i = 0;
-    while (count < topN)
-    {
-	show = 1;
-	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), ip, 16);
-
-	if (realmode == 0)
-	{
-	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	    {
-		if (ipTable[i].sin_addr.s_addr == whitelist[j])
-		    show = 0;
-	    }
-	}
-
-	if (show == 1)
-	{
-	    snprintf(buf, BUFSIZE - 1, "%5u\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++count, ip,
-		    ((double) ipTable[i].nflow[UPLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSock(peerFd, buf, strlen(buf));
-	}
-	++i;
-    }
-}
-
-static void GetOldByTopN(int year, int month, int day, uint topN, char realmode)
-{
-    int i, j;
-    uint count = 0;
-    char buf[BUFSIZE];
-    char ip[17];
-    char show;
-
-    if (topN <= 0 || topN >= sumIpCount)
-	return;
-
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, year, month, day);
-
-    if (ImportRecord(buf) == 0)
-    {
-	SendBufToSock(peerFd, "No data\n", 8);
-	return;
+    if (topN <= 0 || topN >= sumIpCount) {
+	SET_JSON_RET_INFO(jsonResp, E_INVALID_PARAM);
+	goto Exit;
     }
 
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
-    snprintf(buf, BUFSIZE - 1, "Time: %4d-%02d-%02d\nNo.     IP                      UPLOAD (MB)     DOWNLOAD (MB)   SUM (MB)\n", year, month, day);
-    strcat(buf, "------------------------------------------------------------------------------------\n");
-    SendBufToSock(peerFd, buf, strlen(buf));
+    if (jsonData == NULL) {
+	fprintf(stderr, "Unable to create a new json data.\n");
+	goto Exit;
+    }
 
-    i = 0;
-    while (count < topN)
-    {
-	show = 1;
-	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), ip, 16);
+    // limit
+    json_object_set_new(jsonResp, "limit", json_integer(topN));
 
-	if (realmode == 0)
-	{
-	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++)
-	    {
-		if (ipTable[i].sin_addr.s_addr == whitelist[j])
-		    show = 0;
+    // data
+    while (rank < topN) {
+	char ip[17] = {0};
+	BOOL isShow = TRUE;
+	inet_ntop(PF_INET, (void *) &(ipTable[i].sin_addr), ip, sizeof(ip) - 1);
+
+	if (isShowAll == FALSE) {
+	    int j = 0;
+	    for (j = 0; whitelist[j] != 0 && j < MAX_WHITELIST; j++) {
+		if (ipTable[i].sin_addr.s_addr == whitelist[j]) {
+		    isShow = FALSE;
+		    break;
+		}
 	    }
 	}
 
-	if (show == 1)
-	{
-	    snprintf(buf, BUFSIZE - 1, "%5u\t%-16.16s\t%-12.6f\t%-12.6f\t%-12.6f\n", ++count, ip,
-		    ((double) ipTable[i].nflow[UPLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES,
-		    ((double) ipTable[i].nflow[SUM]) / MBYTES);
-	    SendBufToSock(peerFd, buf, strlen(buf));
+	if (isShow) {
+	    json_t *jsonDataEntity = json_object();
+	    json_object_set_new(jsonDataEntity, "rank", json_integer(++rank));
+	    json_object_set_new(jsonDataEntity, "ip", json_string(ip));
+	    json_object_set_new(jsonDataEntity, "upload", json_real(((double) ipTable[i].nflow[UPLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "download", json_real(((double) ipTable[i].nflow[DOWNLOAD]) / MBYTES));
+	    json_object_set_new(jsonDataEntity, "total", json_real(((double) ipTable[i].nflow[SUM]) / MBYTES));
+	    json_array_append_new(jsonData, jsonDataEntity);
 	}
 	++i;
     }
+    json_object_set_new(jsonResp, "data", jsonData);
+    jsonData = NULL;
+    SET_JSON_RET_INFO(jsonResp, S_OK);
+
+Exit:
+    if (jsonData != NULL) { json_decref(jsonData); }
 }
 
-void parseCmd(char *cmd)
+BOOL parseCmd(const char *_jsonData)
 {
-    char *ptr;
+    BOOL ret = TRUE;
+    const char *cmd = NULL;
+    const char *date = NULL;
+    char *output = NULL;
+    json_t *jsonResp = json_object();
+    json_t *jsonRoot = NULL;
+    json_t *jsonCmd = NULL;
+    json_t *jsonDate = NULL;
+    json_t *jsonShowAll = NULL;
+    json_error_t jsonError = {0};
+    BOOL isToday = FALSE;
+    BOOL isShowAll = FALSE;
+    struct tm tm = {0};
 
-    ptr = strtok(cmd, " \n\t\r");
-    if (ptr == NULL)
-    {
-	SendBufToSock(peerFd, "Invalid Command.\n", 18);
-	return;
+    SET_JSON_RET_INFO(jsonResp, E_INVALID_COMMAND);
+
+    jsonRoot = json_loads(_jsonData, 0, &jsonError);
+    if (jsonRoot == NULL) {
+	fprintf(stderr, "Unable to parse command. _jsonData[%s] jsonErr[%s@%d]\n", _jsonData, jsonError.text, jsonError.line);
+	ret = FALSE;
+	goto Exit;
+    }
+    if (!json_is_object(jsonRoot)) {
+	fprintf(stderr, "jsonRoot is not an object.\n");
+	ret = FALSE;
+	goto Exit;
     }
 
-    // Get Command
-    if (strcasecmp(ptr, "get") == 0)
-    {
-	char *ipPtr;
+    // parse command
+    jsonCmd = json_object_get(jsonRoot, "command");
+    if (jsonCmd == NULL || !json_is_string(jsonCmd)) {
+	fprintf(stderr, "Invalid command format.\n");
+	ret = FALSE;
+	goto Exit;
+    }
+    cmd = json_string_value(jsonCmd);
+    json_object_set_new(jsonResp, "command", json_string(cmd));
 
-	ptr = strtok(NULL, " \n\t\r");
-	if (ptr == NULL)
-	{
-	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
-	    return;
+    // parse date
+    jsonDate = json_object_get(jsonRoot, "date");
+    if (jsonDate == NULL || !json_is_string(jsonDate)) {
+	fprintf(stderr, "Invalid date format.\n");
+	ret = FALSE;
+	goto Exit;
+    }
+    date = json_string_value(jsonDate);
+    if (strcasecmp(date, "today") == 0) {
+	char buf[BUFSIZE] = {0};
+	strftime(buf, sizeof(buf) - 1, "%F %T", &localtm);
+	json_object_set_new(jsonResp, "datetime", json_string(buf));
+	isToday = TRUE;
+    } else {
+	char buf[BUFSIZE] = {0};
+	if (strptime(date, "%Y-%m-%d", &tm) == NULL) {
+	    fprintf(stderr, "Invalid date format.\n");
+	    ret = FALSE;
+	    goto Exit;
+	}
+	snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+
+	if (ImportRecord(buf) == 0) {
+	    SET_JSON_RET_INFO(jsonResp, E_NO_DATA);
+	    ret = FALSE;
+	    goto Exit;
 	}
 
-	ipPtr = ptr;
-	if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-	    GetByIP(ipPtr, 1);
-	else
-	    GetByIP(ipPtr, 0);
+	snprintf(buf, BUFSIZE - 1, "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+	json_object_set_new(jsonResp, "date", json_string(buf));
     }
-    else if (strcasecmp(ptr, "getR") == 0)
-    {
-	int year, month, day;
-	char *ipPtr;
 
-	if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (ipPtr = ptr))
-	{
-	    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-		GetOldByIP(year, month, day, ipPtr, 1);
-	    else
-		GetOldByIP(year, month, day, ipPtr, 0);
+    // parse showAll
+    jsonShowAll = json_object_get(jsonRoot, "showAll");
+    if (jsonShowAll && json_is_string(jsonShowAll) && strcmp(json_string_value(jsonShowAll), secretKey) == 0) {
+	isShowAll = TRUE;
+    }
 
-	    return;
+    // getFlow command
+    if (strcasecmp(cmd, "getFlow") == 0) {
+	json_t *jsonIp = NULL;
+	const char *ip = NULL;
+
+	jsonIp = json_object_get(jsonRoot, "ip");
+	if (jsonIp == NULL || !json_is_string(jsonIp)) {
+	    fprintf(stderr, "Invalid ip format.\n");
+	    ret = FALSE;
+	    goto Exit;
 	}
+	ip = json_string_value(jsonIp);
 
-	SendBufToSock(peerFd, "Invalid Command.\n", 18);
-    }
-    // Over Command
-    else if (strcasecmp(ptr, "over") == 0)
-    {
-	char *overMBPtr;
+	GetByIP(jsonResp, ip, isShowAll);
+    } 
+    // showOverList command
+    else if (strcasecmp(cmd, "showOverList") == 0) {
+	json_t *jsonOverValue = NULL;
+	int overValue = 0;
 
-	ptr = strtok(NULL, " \n\t\r");
-	if (ptr == NULL)
-	{
-	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
-	    return;
+	jsonOverValue = json_object_get(jsonRoot, "overValue");
+	if (jsonOverValue == NULL || !json_is_integer(jsonOverValue)) {
+	    fprintf(stderr, "Invalid overValue format.\n");
+	    ret = FALSE;
+	    goto Exit;
 	}
+	overValue = json_integer_value(jsonOverValue);
 
-	overMBPtr = ptr;
-	if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-	    GetByFlow(atoi(overMBPtr), 1);
-	else
-	    GetByFlow(atoi(overMBPtr), 0);
+	GetByFlow(jsonResp, overValue, isShowAll);
     }
-    else if (strcasecmp(ptr, "overR") == 0)
-    {
-	int year, month, day, overMB;
+    // showTopList Command
+    else if (strcasecmp(cmd, "showTopList") == 0) {
+	json_t *jsonLimit = NULL;
+	int limit = 0;
 
-	if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (overMB = atoi(ptr)) > 0)
-	{
-	    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-		GetOldByFlow(year, month, day, overMB, 1);
-	    else
-		GetOldByFlow(year, month, day, overMB, 0);
-
-	    return;
+	jsonLimit = json_object_get(jsonRoot, "limit");
+	if (jsonLimit == NULL || !json_is_integer(jsonLimit)) {
+	    fprintf(stderr, "Invalid limit format.\n");
+	    ret = FALSE;
+	    goto Exit;
 	}
+	limit = json_integer_value(jsonLimit);
 
-	SendBufToSock(peerFd, "Invalid Command.\n", 18);
+	GetByTopN(jsonResp, limit, isShowAll);
     }
-    // Top Command
-    else if (strcasecmp(ptr, "top") == 0)
-    {
-	char *topNPtr;
-
-	ptr = strtok(NULL, " \n\t\r");
-	if (ptr == NULL)
-	{
-	    SendBufToSock(peerFd, "Invalid Command.\n", 18);
-	    return;
-	}
-
-	topNPtr = ptr;
-	if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-	    GetByTopN(atoi(topNPtr), 1);
-	else
-	    GetByTopN(atoi(topNPtr), 0);
+    else {
+	fprintf(stderr, "Invalid Command. _jsonData[%s]\n", _jsonData);
+	ret = FALSE;
     }
-    else if (strcasecmp(ptr, "topR") == 0)
-    {
-	int year, month, day, topN;
 
-	if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (year = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (month = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) == NULL || (day = atoi(ptr)) <= 0) ;
-	else if ((ptr = strtok(NULL, " \n\t\r")) != NULL && (topN = atoi(ptr)) > 0)
-	{
-	    if ((ptr = strtok(NULL, " \n\t\r")) != NULL && strcmp(ptr, SECRET_KEY) == 0)
-		GetOldByTopN(year, month, day, topN, 1);
-	    else
-		GetOldByTopN(year, month, day, topN, 0);
+Exit:
+    output = json_dumps(jsonResp, JSON_INDENT(4));
+    SendBufToSock(peerFd, output, strlen(output));
+    if (output != NULL) { free(output); output = NULL; }
 
-	    return;
-	}
+    if (jsonRoot != NULL) { json_decref(jsonRoot); }
+    if (jsonResp != NULL) { json_decref(jsonResp); }
 
-	SendBufToSock(peerFd, "Invalid Command.\n", 18);
-    }
-    else
-    {
-	SendBufToSock(peerFd, "Invalid Command.\n", 18);
-    }
+    return ret;
 }
 

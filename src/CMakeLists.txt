@@ -11,6 +11,6 @@ set(FLOWD_SRCS
 )
 
 find_package(ZLIB REQUIRED)
-link_libraries(${ZLIB_LIBRARIES})
+link_libraries(${ZLIB_LIBRARIES} jansson)
 add_executable(flowd ${FLOWD_SRCS})
 install(TARGETS flowd RUNTIME DESTINATION bin)
