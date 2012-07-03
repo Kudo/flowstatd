@@ -25,6 +25,9 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#define TRUE		1
+#define FALSE		0
+
 //#define	MBYTES		1048576
 #define MBYTES		1000000
 #define	BUFSIZE		8192
@@ -54,6 +57,7 @@
  */
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef unsigned int BOOL;
 
 struct hostflow {
     struct in_addr sin_addr;

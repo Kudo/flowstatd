@@ -22,6 +22,6 @@
 #ifndef _COMMAND_H_
 #define _COMMAND_H_
 
-void parseCmd(char *cmd);
+BOOL parseCmd(const char *_jsonData);
 
 #endif	/* _COMMAND_H_ */
