@@ -1,14 +1,14 @@
-Kudo's flowd
+flowstatd
 ====================
 
 1. Introduction
 ---------------------
-flowd is a Netflow statistics service provides these features:
+flowstatd is a Netflow statistics service provides these features:
 - Very lightweight
 - Real time query, all the data queried is latest
 - Calculate each IP's flow day by day
 - Can list top flow's IP addresses
-- With given over quota flow bytes, flowd can list overflow IP addresses
+- With given over quota flow bytes, flowstatd can list overflow IP addresses
 - Socket based query protocol, you can implement frontend your own.
 - Provide white list which can hide some IP addresses' record.
 
@@ -25,7 +25,7 @@ Requirements:
 
 Build:
 ```
-cd /path/to/flowd
+cd /path/to/flowstatd
 mkdir build
 cd build
 cmake ..
@@ -34,8 +34,8 @@ make install
 
 Usage:
 ```
-cd /path/to/flowd/bin
-./flowd [-i listen_ip_address] -p <netflow_export_to_which_port> [-P flowd_command_port]
+cd /path/to/flowstatd/bin
+./flowstatd [-f /path/to/config.json]
 ```
 
 4. License

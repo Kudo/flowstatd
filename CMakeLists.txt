@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
-project(FLOWD)
+project(FLOWSTATD)
 
 set(CMAKE_C_FLAGS "-Wall")
-set(CMAKE_INSTALL_PREFIX "${FLOWD_SOURCE_DIR}")
+set(CMAKE_INSTALL_PREFIX "${FLOWSTATD_SOURCE_DIR}")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)

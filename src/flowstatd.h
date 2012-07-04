@@ -19,8 +19,8 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _FLOWD_H_
-#define _FLOWD_H_
+#ifndef _FLOWSTATD_H_
+#define _FLOWSTATD_H_
 
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -40,8 +40,6 @@
 #define	SUM		2
 
 #define	DEF_CONFIG_FILE		"/etc/config.json"
-#define NETFLOW_LISTEN_PORT	9991
-#define FLOWD_LISTEN_PORT	9000
 
 #define	TODAY		0
 #define	YESTERDAY	1

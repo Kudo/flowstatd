@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <zlib.h>
-#include "flowd.h"
+#include "flowstatd.h"
 #include "jansson.h"
 #include "command.h"
 #include "multiplex.h"
@@ -36,7 +36,7 @@
 #include "socket.h"
 
 int netflowSockFd;
-int flowdSockFd;
+int flowstatdSockFd;
 int peerFd;
 MultiplexerFunc_t *multiplexer;
 
@@ -105,7 +105,7 @@ void ExportRecord(int mode)
 
     if (mode == TODAY)
     {
-	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
+	snprintf(buf, 99, "%s/flowstatdata.%04d-%02d-%02d.gz", savePrefix, 
 		localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
     }
     else
@@ -116,7 +116,7 @@ void ExportRecord(int mode)
 	yesterday = time(NULL) - 86400;
 	localtime_r(&yesterday, &newtm);
 
-	snprintf(buf, 99, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
+	snprintf(buf, 99, "%s/flowstatdata.%04d-%02d-%02d.gz", savePrefix, 
 		newtm.tm_year + 1900, newtm.tm_mon + 1, newtm.tm_mday);
     }
 
@@ -199,7 +199,7 @@ static void Usage(char *progName)
     exit(EXIT_SUCCESS);
 }
 
-static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindPort, uint16_t *flowdBindPort)
+static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindPort, uint16_t *flowstatdBindPort)
 {
     int nSubnet = 0;
     int length = 0;
@@ -345,13 +345,13 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
     }
     *netflowBindPort = htons(json_integer_value(jsonData));
 
-    // [6] flowdListenPort
-    jsonData = json_object_get(jsonRoot, "flowdListenPort");
+    // [6] flowstatdListenPort
+    jsonData = json_object_get(jsonRoot, "flowstatdListenPort");
     if (jsonData == NULL || !json_is_integer(jsonData)) {
-	fprintf(stderr, "flowdListenPort is missing.\n");
+	fprintf(stderr, "flowstatdListenPort is missing.\n");
 	goto Exit;
     }
-    *flowdBindPort = htons(json_integer_value(jsonData));
+    *flowstatdBindPort = htons(json_integer_value(jsonData));
 
 
 Exit:
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
 
     in_addr_t bindIpAddr = INADDR_ANY;
     uint16_t netflowBindPort = 0;
-    uint16_t flowdBindPort = 0;
+    uint16_t flowstatdBindPort = 0;
 
     int nev;
 
@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    nSubnet = LoadConfig(configFile, &bindIpAddr, &netflowBindPort, &flowdBindPort);
+    nSubnet = LoadConfig(configFile, &bindIpAddr, &netflowBindPort, &flowstatdBindPort);
     if (nSubnet <= 0)
 	return -1;
     LoadWhitelist(configFile);
@@ -454,21 +454,21 @@ int main(int argc, char *argv[])
     signal(SIGTERM, &Exits);
     signal(SIGHUP, &Update);
 
-    snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, 
+    snprintf(buf, BUFSIZE - 1, "%s/flowstatdata.%04d-%02d-%02d.gz", savePrefix, 
 	    localtm.tm_year + 1900, localtm.tm_mon + 1, localtm.tm_mday);
 
     ImportRecord(buf);
     setvbuf(stdout, NULL, _IONBF, 0);
 
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
-    flowdSockFd = BuildTCPSock(bindIpAddr, flowdBindPort);
+    flowstatdSockFd = BuildTCPSock(bindIpAddr, flowstatdBindPort);
 
     multiplexer = NewMultiplexer();
     if (multiplexer->Init(multiplexer) == 0)
 	Diep("Multiplexer Init() failed");
     
     multiplexer->AddToList(multiplexer, netflowSockFd);
-    multiplexer->AddToList(multiplexer, flowdSockFd);
+    multiplexer->AddToList(multiplexer, flowstatdSockFd);
 
     plen = sizeof(struct sockaddr_in);
 
@@ -523,9 +523,9 @@ int main(int argc, char *argv[])
 
                 AddFlowData(buf, n, &pin);
 	    }
-	    else if (multiplexer->IsActive(multiplexer, flowdSockFd))
+	    else if (multiplexer->IsActive(multiplexer, flowstatdSockFd))
 	    {
-		if ((peerFd = accept(flowdSockFd, (struct sockaddr *) &pin, &plen)) == -1)
+		if ((peerFd = accept(flowstatdSockFd, (struct sockaddr *) &pin, &plen)) == -1)
 		{
 		    Diep("accept() error");
 		    continue;
@@ -559,7 +559,7 @@ int main(int argc, char *argv[])
     NetflowHandlerUnInit();
     FreeMultiplexer(multiplexer);
     close(netflowSockFd);
-    close(flowdSockFd);
+    close(flowstatdSockFd);
     free(ipTable);
 
     return 0;

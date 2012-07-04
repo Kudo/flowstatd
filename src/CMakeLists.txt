@@ -1,9 +1,9 @@
-set(FLOWD_SRCS
+set(FLOWSTATD_SRCS
     command.c
     netflow.c
     netflow_handler_v5.c
     netflow_handler_v9.c
-    flowd.c
+    flowstatd.c
     fttime.c
     multiplex.c
     socket.c
@@ -12,5 +12,5 @@ set(FLOWD_SRCS
 
 find_package(ZLIB REQUIRED)
 link_libraries(${ZLIB_LIBRARIES} jansson)
-add_executable(flowd ${FLOWD_SRCS})
-install(TARGETS flowd RUNTIME DESTINATION bin)
+add_executable(flowstatd ${FLOWSTATD_SRCS})
+install(TARGETS flowstatd RUNTIME DESTINATION bin)

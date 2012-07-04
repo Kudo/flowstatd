@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@
 #include "netflow.h"
 #include "netflow_handler_v5.h"
 #include "netflow_handler_v9.h"
-#include "flowd.h"
+#include "flowstatd.h"
 
 NetflowHandlerFunc_t *g_nfHandlerV5 = NULL;
 NetflowHandlerFunc_t *g_nfHandlerV9 = NULL;

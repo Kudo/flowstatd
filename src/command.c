@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include "jansson.h"
-#include "flowd.h"
+#include "flowstatd.h"
 #include "socket.h"
 #include "netflow.h"
 #include "errorCode.h"
@@ -294,7 +294,7 @@ BOOL parseCmd(const char *_jsonData)
 	    ret = FALSE;
 	    goto Exit;
 	}
-	snprintf(buf, BUFSIZE - 1, "%s/flowdata.%04d-%02d-%02d.gz", savePrefix, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+	snprintf(buf, BUFSIZE - 1, "%s/flowstatdata.%04d-%02d-%02d.gz", savePrefix, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
 
 	if (ImportRecord(buf) == 0) {
 	    SET_JSON_RET_INFO(jsonResp, E_NO_DATA);
