@@ -35,6 +35,7 @@
 #ifndef _FTTIME_H_
 #define _FTTIME_H_
 
+#include <stdint.h>
 #include <sys/types.h>
 
 struct fttime {

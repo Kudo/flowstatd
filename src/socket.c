@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -24,11 +24,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
-#include "flowd.h"
+#include "flowstatd.h"
 #include "multiplex.h"
 
 extern int netflowSockFd;
-extern int flowdSockFd;
+extern int flowstatdSockFd;
 extern int peerFd;
 extern MultiplexerFunc_t *multiplexer;
 
@@ -93,7 +93,7 @@ int BuildTCPSock(in_addr_t listen_ipaddr, uint16_t listen_port)
 void Exits(int s)
 {
     close(netflowSockFd);
-    close(flowdSockFd);
+    close(flowstatdSockFd);
     FreeMultiplexer(multiplexer);
     ExportRecord(TODAY);
     free(ipTable);
@@ -104,7 +104,7 @@ void SockExit(int s)
 {
     SendBufToSock(peerFd, "Timeout.\n", 9);
     close(netflowSockFd);
-    close(flowdSockFd);
+    close(flowstatdSockFd);
     FreeMultiplexer(multiplexer);
     free(ipTable);
     exit(EXIT_SUCCESS);

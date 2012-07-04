@@ -19,11 +19,17 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _FLOWD_H_
-#define _FLOWD_H_
+#ifndef _FLOWSTATD_H_
+#define _FLOWSTATD_H_
 
 #include <sys/types.h>
 #include <netinet/in.h>
+
+#define FLOWSTATD_VERSION_MAJOR	    1
+#define FLOWSTATD_VERSION_MINOR	    0
+
+#define TRUE		1
+#define FALSE		0
 
 //#define	MBYTES		1048576
 #define MBYTES		1000000
@@ -36,12 +42,7 @@
 #define	DOWNLOAD	1
 #define	SUM		2
 
-#define	DEF_SAVE_PREFIX		"../data"
-#define	DEF_SUBNET_FILE		"../etc/subnet.conf"
-#define	DEF_WHITELIST		"../etc/whitelist"
-#define NETFLOW_LISTEN_PORT	9991
-#define FLOWD_LISTEN_PORT	9000
-#define	SECRET_KEY		"secret"
+#define	DEF_CONFIG_FILE		"/etc/config.json"
 
 #define	TODAY		0
 #define	YESTERDAY	1
@@ -56,6 +57,7 @@
  */
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef unsigned int BOOL;
 
 struct hostflow {
     struct in_addr sin_addr;

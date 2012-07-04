@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <string.h>
 #include "multiplex.h"
-#include "flowd.h"
+#include "flowstatd.h"
 
 int selectInitImpl(MultiplexerFunc_t *this)
 {

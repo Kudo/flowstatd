@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -21,7 +21,7 @@
 
 #ifndef _MULTIPLEX_H
 #define _MULTIPLEX_H
-#include "flowd.h"
+#include "flowstatd.h"
 
 #define MAX_MONITOR_FD_COUNT	    2
 

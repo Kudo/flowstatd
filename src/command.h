@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -22,6 +22,6 @@
 #ifndef _COMMAND_H_
 #define _COMMAND_H_
 
-void parseCmd(char *cmd);
+BOOL parseCmd(const char *_jsonData);
 
 #endif	/* _COMMAND_H_ */
