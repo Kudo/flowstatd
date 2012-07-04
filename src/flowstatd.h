@@ -25,6 +25,9 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#define FLOWSTATD_VERSION_MAJOR	    1
+#define FLOWSTATD_VERSION_MINOR	    0
+
 #define TRUE		1
 #define FALSE		0
 
