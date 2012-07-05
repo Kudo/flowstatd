@@ -1,5 +1,5 @@
 /*
-    flowd - Netflow statistics daemon
+    flowstatd - Netflow statistics daemon
     Copyright (C) 2012 Kudo Chien <ckchien@gmail.com>
 
     This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@
 
 #define FLOWSTATD_VERSION_MAJOR	    1
 #define FLOWSTATD_VERSION_MINOR	    0
+#define FLOWSTATD_VERSION_BUILD	    1
 
 #define TRUE		1
 #define FALSE		0
