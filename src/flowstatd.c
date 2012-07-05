@@ -199,7 +199,7 @@ static void Usage(char *progName)
     exit(EXIT_SUCCESS);
 }
 
-static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindPort, uint16_t *flowstatdBindPort)
+static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindPort, uint16_t *commandBindPort)
 {
     int nSubnet = 0;
     int length = 0;
@@ -345,13 +345,13 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
     }
     *netflowBindPort = htons(json_integer_value(jsonData));
 
-    // [6] flowstatdListenPort
-    jsonData = json_object_get(jsonRoot, "flowstatdListenPort");
+    // [6] commandListenPort
+    jsonData = json_object_get(jsonRoot, "commandListenPort");
     if (jsonData == NULL || !json_is_integer(jsonData)) {
-	fprintf(stderr, "flowstatdListenPort is missing.\n");
+	fprintf(stderr, "commandListenPort is missing.\n");
 	goto Exit;
     }
-    *flowstatdBindPort = htons(json_integer_value(jsonData));
+    *commandBindPort = htons(json_integer_value(jsonData));
 
 
 Exit:
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
 
     in_addr_t bindIpAddr = INADDR_ANY;
     uint16_t netflowBindPort = 0;
-    uint16_t flowstatdBindPort = 0;
+    uint16_t commandBindPort = 0;
 
     int nev;
 
@@ -428,7 +428,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    nSubnet = LoadConfig(configFile, &bindIpAddr, &netflowBindPort, &flowstatdBindPort);
+    nSubnet = LoadConfig(configFile, &bindIpAddr, &netflowBindPort, &commandBindPort);
     if (nSubnet <= 0)
 	return -1;
     LoadWhitelist(configFile);
@@ -461,7 +461,7 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IONBF, 0);
 
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
-    flowstatdSockFd = BuildTCPSock(bindIpAddr, flowstatdBindPort);
+    flowstatdSockFd = BuildTCPSock(bindIpAddr, commandBindPort);
 
     multiplexer = NewMultiplexer();
     if (multiplexer->Init(multiplexer) == 0)
