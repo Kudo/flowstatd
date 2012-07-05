@@ -195,7 +195,7 @@ static void Update(int s)
 
 static void Usage(char *progName)
 {
-    printf("flowstatd version %d.%d\nUsage: %s [-v] [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, progName);
+    printf("flowstatd version %d.%d.%d\nUsage: %s [-v] [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, FLOWSTATD_VERSION_BUILD, progName);
     exit(EXIT_SUCCESS);
 }
 
