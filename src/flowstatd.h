@@ -27,7 +27,7 @@
 
 #define FLOWSTATD_VERSION_MAJOR	    1
 #define FLOWSTATD_VERSION_MINOR	    0
-#define FLOWSTATD_VERSION_BUILD	    0
+#define FLOWSTATD_VERSION_BUILD	    1
 
 #define TRUE		1
 #define FALSE		0
