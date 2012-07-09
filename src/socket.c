@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include "flowstatd.h"
 #include "multiplex.h"
@@ -109,3 +110,59 @@ void SockExit(int s)
     free(ipTable);
     exit(EXIT_SUCCESS);
 }
+
+
+/*
+ * function: bigsockbuf
+ *
+ * There is no portable way to determine the max send and receive buffers
+ * that can be set for a socket, so guess then decrement that guess by
+ * 2K until the call succeeds.  If n > 1MB then the decrement by .5MB
+ * instead.
+ *
+ * returns size or -1 for error
+ *
+ * Code reuses from flow-tools ( http://code.google.com/p/flow-tools/ )
+ * The License will follow origin one.
+ *
+*/
+int bigsockbuf(int fd, int dir, int size)
+{
+  int n, tries;
+
+  /* initial size */
+  n = size;
+  tries = 0;
+
+  while (n > 4096) {
+
+    if (setsockopt(fd, SOL_SOCKET, dir, (char*)&n, sizeof (n)) < 0) {
+
+      /* anything other than no buffers available is fatal */
+      if (errno != ENOBUFS) {
+        fprintf(stderr,"Warning: setsockopt(size=%d)", n);
+        return -1;
+      }
+
+      /* try a smaller value */
+
+      if (n > 1024*1024) /* most systems not > 256K bytes w/o tweaking */
+        n -= 1024*1024;
+      else
+        n -= 2048;
+
+      ++tries;
+
+    } else {
+
+      fprintf(stderr,"Info: setsockopt(size=%d)", n);
+      return n;
+
+    }
+
+  } /* while */
+
+  /* no increase in buffer size */
+  return 0;
+
+} /* bigsockbuf */

@@ -461,6 +461,8 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IONBF, 0);
 
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
+    if (bigsockbuf(netflowSockFd, SO_RCVBUF, SOCKET_RCV_BUFSIZE) < 0)
+	fprintf(stderr, "bigsockbuf() failed\n");
     flowstatdSockFd = BuildTCPSock(bindIpAddr, commandBindPort);
 
     multiplexer = NewMultiplexer();
