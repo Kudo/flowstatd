@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include "flowstatd.h"
+#include "liblogger/liblogger.h"
 #include "multiplex.h"
 
 extern int netflowSockFd;
@@ -140,7 +141,7 @@ int bigsockbuf(int fd, int dir, int size)
 
       /* anything other than no buffers available is fatal */
       if (errno != ENOBUFS) {
-        fprintf(stderr,"Warning: setsockopt(size=%d)", n);
+        LogWarn("setsockopt(size=%d)", n);
         return -1;
       }
 
@@ -155,7 +156,7 @@ int bigsockbuf(int fd, int dir, int size)
 
     } else {
 
-      fprintf(stderr,"Info: setsockopt(size=%d)", n);
+      LogInfo("setsockopt(size=%d)", n);
       return n;
 
     }

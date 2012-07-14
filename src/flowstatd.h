@@ -91,6 +91,5 @@ extern uint sumIpCount;
 
 int ImportRecord(char *fname);
 void ExportRecord(int mode);
-void Warn(const char *msg);
 void Diep(const char *s);
 #endif

@@ -20,3 +20,11 @@ ExternalProject_Add(jansson
     INSTALL_DIR ${CMAKE_BINARY_DIR}
     CMAKE_ARGS ${jansson_CMAKE_ARGS} -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
 )
+
+ExternalProject_Add(liblogger
+    PREFIX logger
+    GIT_REPOSITORY git://github.com/Kudo/liblogger.git
+    GIT_TAG runtimeDebugLevel
+    INSTALL_DIR ${CMAKE_BINARY_DIR}
+    CMAKE_ARGS ${liblogger_CMAKE_ARGS} -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+)

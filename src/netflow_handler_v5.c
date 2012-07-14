@@ -18,10 +18,12 @@
 
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
+#include <stdio.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <time.h>
 #include "flowstatd.h"
+#include "liblogger/liblogger.h"
 #include "fttime.h"
 #include "netflow_handler_v5.h"
 
@@ -44,7 +46,7 @@ static int IsValidPacket(const char *packetBuf, int packetLen)
 
     if ((packetLen - NF_V5_HEADER_SIZE) % NF_V5_RECORD_SIZE != 0)
     {
-	Warn("Warning: Invalid Netflow V5 packet.");
+	LogWarn("Invalid Netflow V5 packet.");
 	return 0;
     }
 
@@ -54,7 +56,7 @@ static int IsValidPacket(const char *packetBuf, int packetLen)
 
     if (ntohs(header->count) != recCount)
     {
-	Warn("Warning: Invalid Netflow V5 packet.");
+	LogWarn("Invalid Netflow V5 packet.");
 	return 0;
     }
 

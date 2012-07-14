@@ -24,6 +24,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "liblogger/liblogger.h"
 #include "fttime.h"
 #include "netflow.h"
 #include "netflow_handler_v5.h"
@@ -123,7 +124,7 @@ void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
 	inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
 	inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
 
-	printf("%-17.17s -> %-17.17s Octets: %u\n", src_ip, dst_ip, octets);
+	LogInfo("%-17.17s -> %-17.17s Octets: %u", src_ip, dst_ip, octets);
     }
 }
 
