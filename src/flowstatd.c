@@ -358,7 +358,7 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
 
     // [7] Debug log
     fileInitParams.moduleName = "flowstatd";
-    fileInitParams.logLevel = Error;
+    fileInitParams.logLevel = Disable;
     fileInitParams.fileName = (char *) "flowstatd.log";
     jsonData = json_object_get(jsonRoot, "logLevel");
     if (jsonData != NULL && json_is_string(jsonData)) {
@@ -368,6 +368,7 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
 	CHK_LOG_LEVEL("warning", Warn);
 	CHK_LOG_LEVEL("error", Error);
 	CHK_LOG_LEVEL("fatal", Fatal);
+	CHK_LOG_LEVEL("disable", Disable);
     }
     jsonData = json_object_get(jsonRoot, "logPath");
     if (jsonData != NULL && json_is_string(jsonData))
