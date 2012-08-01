@@ -24,11 +24,18 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include "liblogger/liblogger.h"
 #include "fttime.h"
 #include "netflow.h"
 #include "netflow_handler_v5.h"
 #include "netflow_handler_v9.h"
 #include "flowstatd.h"
+
+#ifdef NDEBUG
+#define displayFlowEntry(srcaddr, dstaddr, octets)
+#else
+#define displayFlowEntry(srcaddr, dstaddr, octets)	displayFlowEntryImpl(srcaddr, dstaddr, octets)
+#endif
 
 NetflowHandlerFunc_t *g_nfHandlerV5 = NULL;
 NetflowHandlerFunc_t *g_nfHandlerV9 = NULL;
@@ -110,21 +117,18 @@ inline int getIPIdx(in_addr_t ipaddr)
     return RET_NOT_IN_MYNET;
 }
 
-void displayFlowEntry(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
+void displayFlowEntryImpl(in_addr_t srcaddr, in_addr_t dstaddr, uint32_t octets)
 {
-    if (debug)
-    {
-	char src_ip[17];
-	char dst_ip[17];
-	struct in_addr src_addr, dst_addr;
+    char src_ip[17];
+    char dst_ip[17];
+    struct in_addr src_addr, dst_addr;
 
-	src_addr.s_addr = srcaddr;
-	dst_addr.s_addr = dstaddr;
-	inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
-	inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
+    src_addr.s_addr = srcaddr;
+    dst_addr.s_addr = dstaddr;
+    inet_ntop(PF_INET, (void *) &src_addr, src_ip, 16);
+    inet_ntop(PF_INET, (void *) &dst_addr, dst_ip, 16);
 
-	printf("%-17.17s -> %-17.17s Octets: %u\n", src_ip, dst_ip, octets);
-    }
+    LogDebug("%-17.17s -> %-17.17s Octets: %u", src_ip, dst_ip, octets);
 }
 
 struct tm ConvertNfTime(NfTimeInfo_t *nfTimeInfo)

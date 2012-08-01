@@ -23,6 +23,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include "liblogger/liblogger.h"
 #include "netflow_handler_v9.h"
 
 static struct NF_V9_template_table_entry *g_templateTable = NULL;
@@ -88,7 +89,7 @@ static int _SaveTemplate(struct sockaddr_in *sourceAddr, uint32_t sourceId, stru
 	if (g_sourceTable[sourceOffset].sourceIp != sourceAddr->sin_addr.s_addr ||
 	    g_sourceTable[sourceOffset].sourceId != sourceId)
 	{
-	    printf("##### source collison ##### g_sourceTable[sourceOffset].sourceIp[%d] sourceIp[%d] g_sourceTable[sourceOffset].sourceId[%d] sourceId[%d]\n",
+	    LogFatal("##### source collison ##### g_sourceTable[sourceOffset].sourceIp[%d] sourceIp[%d] g_sourceTable[sourceOffset].sourceId[%d] sourceId[%d]",
 		    g_sourceTable[sourceOffset].sourceIp,
 		    sourceAddr->sin_addr.s_addr,
 		    g_sourceTable[sourceOffset].sourceId,
@@ -102,12 +103,12 @@ static int _SaveTemplate(struct sockaddr_in *sourceAddr, uint32_t sourceId, stru
 	g_sourceTable[sourceOffset].templatePtr = &(g_templateTable[templateId]);
     }
     /*
-    printf("_SaveTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]\n", templateId, sourceOffset, templateOffset, fieldsCount);
+    LogDebug("_SaveTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]", templateId, sourceOffset, templateOffset, fieldsCount);
     {
         char ip[17];
 
         inet_ntop(PF_INET, (void *) &sourceAddr->sin_addr, ip, 16);
-	printf("_SaveTemplate. sourceIp[%s] sourceId[%d] templateId[%d]\n", ip, sourceId, ntohs(templateHeader->template_id));
+	LogDebug("_SaveTemplate. sourceIp[%s] sourceId[%d] templateId[%d]", ip, sourceId, ntohs(templateHeader->template_id));
     }
     */
     g_templateTable[templateId].template_type = NF_V9_TEMPLATE_TYPE_TEMPLATE;
@@ -135,18 +136,18 @@ static int _HandleData(struct sockaddr_in *sourceAddr, uint32_t sourceId, struct
     struct NF_V9_flowset_record *fields = g_templateTable[templateId].fields;
 
     /*
-    printf("_UseTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]\n", templateId, sourceOffset, templateOffset, fieldCount);
+    LogDebug("_UseTemplate[%d] sourceOffset[%d] templateOffset[%d] fieldsCount[%d]", templateId, sourceOffset, templateOffset, fieldCount);
     {
         char ip[17];
 
         inet_ntop(PF_INET, (void *) &sourceAddr->sin_addr, ip, 16);
-	printf("_UseTemplate. sourceIp[%s] sourceId[%d] templateId[%d]\n", ip, sourceId, ntohs(flowSetHeader->flowset_id));
+	LogDebug("_UseTemplate. sourceIp[%s] sourceId[%d] templateId[%d]", ip, sourceId, ntohs(flowSetHeader->flowset_id));
     }
     */
 
     if (g_templateTable[templateId].template_type == NF_V9_TEMPLATE_TYPE_NONE)
     {
-	//printf("No template data\n");
+	LogInfo("No template data.");
 	return 0;
     }
     while (currPos + g_templateTable[templateId].record_length < dataLen)
@@ -187,7 +188,7 @@ static int _HandleData(struct sockaddr_in *sourceAddr, uint32_t sourceId, struct
 			else if (fields[currField].length == 2)
 			    flowBytes = ntohs(*((uint16_t *)(dataBegin + currPos)));
 			else
-			    printf("********** byteLength[%d] ***********\n", fields[currField].length);
+			    LogWarn("NF_V9_FIELD_TYPE_IN_BYTES is not 2 or 4 bytes. flowBytes[%d]", fields[currField].length);
 		    }
 		    break;
 		case NF_V9_FIELD_TYPE_FIRST_SWITCHED:
@@ -205,7 +206,7 @@ static int _HandleData(struct sockaddr_in *sourceAddr, uint32_t sourceId, struct
 	}
 	else
 	{
-	    // printf("------------------- No enough info. srcAddr[%x] dstAddr[%x] flowBytes[%d] nfTimeInfo.FirstPacketTime[%d]\n", srcAddr, dstAddr, flowBytes, nfTimeInfo.FirstPacketTime);
+	    //LogDebug("------------------- No enough info. srcAddr[%x] dstAddr[%x] flowBytes[%d] nfTimeInfo.FirstPacketTime[%d]", srcAddr, dstAddr, flowBytes, nfTimeInfo.FirstPacketTime);
 	}
     }
 

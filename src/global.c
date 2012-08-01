@@ -25,9 +25,7 @@
 /*
  * Global variables
  */
-int verbose;
 int daemonMode;
-int debug;
 struct tm localtm;
 struct hostflow *ipTable;
 struct hostflow *hashTable;

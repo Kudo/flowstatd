@@ -31,6 +31,7 @@
 #include "socket.h"
 #include "netflow.h"
 #include "errorCode.h"
+#include "liblogger/liblogger.h"
 
 extern int peerFd;
 extern char savePrefix[100];
@@ -134,7 +135,7 @@ static void GetByFlow(json_t *jsonResp, uint overMB, BOOL isShowAll)
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
     if (jsonData == NULL) {
-	fprintf(stderr, "Unable to create a new json data.\n");
+	LogError("Unable to create a new json data");
 	goto Exit;
     }
 
@@ -192,7 +193,7 @@ static void GetByTopN(json_t *jsonResp, uint topN, BOOL isShowAll)
     qsort(ipTable, sumIpCount, sizeof(struct hostflow), HostFlowCmp);
 
     if (jsonData == NULL) {
-	fprintf(stderr, "Unable to create a new json data.\n");
+	LogError("Unable to create a new json data");
 	goto Exit;
     }
 
@@ -254,12 +255,12 @@ BOOL parseCmd(const char *_jsonData)
 
     jsonRoot = json_loads(_jsonData, 0, &jsonError);
     if (jsonRoot == NULL) {
-	fprintf(stderr, "Unable to parse command. _jsonData[%s] jsonErr[%s@%d]\n", _jsonData, jsonError.text, jsonError.line);
+	LogError("Unable to parse command. _jsonData[%s] jsonErr[%s@%d]", _jsonData, jsonError.text, jsonError.line);
 	ret = FALSE;
 	goto Exit;
     }
     if (!json_is_object(jsonRoot)) {
-	fprintf(stderr, "jsonRoot is not an object.\n");
+	LogError("jsonRoot is not an object.");
 	ret = FALSE;
 	goto Exit;
     }
@@ -267,7 +268,7 @@ BOOL parseCmd(const char *_jsonData)
     // parse command
     jsonCmd = json_object_get(jsonRoot, "command");
     if (jsonCmd == NULL || !json_is_string(jsonCmd)) {
-	fprintf(stderr, "Invalid command format.\n");
+	LogError("Invalid command format.");
 	ret = FALSE;
 	goto Exit;
     }
@@ -277,7 +278,7 @@ BOOL parseCmd(const char *_jsonData)
     // parse date
     jsonDate = json_object_get(jsonRoot, "date");
     if (jsonDate == NULL || !json_is_string(jsonDate)) {
-	fprintf(stderr, "Invalid date format.\n");
+	LogError("Invalid date format.");
 	ret = FALSE;
 	goto Exit;
     }
@@ -290,7 +291,7 @@ BOOL parseCmd(const char *_jsonData)
     } else {
 	char buf[BUFSIZE] = {0};
 	if (strptime(date, "%Y-%m-%d", &tm) == NULL) {
-	    fprintf(stderr, "Invalid date format.\n");
+	    LogError("Invalid date format.");
 	    ret = FALSE;
 	    goto Exit;
 	}
@@ -319,7 +320,7 @@ BOOL parseCmd(const char *_jsonData)
 
 	jsonIp = json_object_get(jsonRoot, "ip");
 	if (jsonIp == NULL || !json_is_string(jsonIp)) {
-	    fprintf(stderr, "Invalid ip format.\n");
+	    LogError("Invalid ip format.");
 	    ret = FALSE;
 	    goto Exit;
 	}
@@ -334,7 +335,7 @@ BOOL parseCmd(const char *_jsonData)
 
 	jsonOverValue = json_object_get(jsonRoot, "overValue");
 	if (jsonOverValue == NULL || !json_is_integer(jsonOverValue)) {
-	    fprintf(stderr, "Invalid overValue format.\n");
+	    LogError("Invalid overValue format.");
 	    ret = FALSE;
 	    goto Exit;
 	}
@@ -349,7 +350,7 @@ BOOL parseCmd(const char *_jsonData)
 
 	jsonLimit = json_object_get(jsonRoot, "limit");
 	if (jsonLimit == NULL || !json_is_integer(jsonLimit)) {
-	    fprintf(stderr, "Invalid limit format.\n");
+	    LogError("Invalid limit format.");
 	    ret = FALSE;
 	    goto Exit;
 	}
@@ -358,7 +359,7 @@ BOOL parseCmd(const char *_jsonData)
 	GetByTopN(jsonResp, limit, isShowAll);
     }
     else {
-	fprintf(stderr, "Invalid Command. _jsonData[%s]\n", _jsonData);
+	LogError("Invalid Command. _jsonData[%s]", _jsonData);
 	ret = FALSE;
     }
 

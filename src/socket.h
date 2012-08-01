@@ -24,10 +24,13 @@
 
 #include <netinet/in.h>
 
+#define SOCKET_RCV_BUFSIZE      (4*1024*1024)	    /* UDP recv socket buffer size */
+
 void SendBufToSock(int sckfd, const char *buf, int len);
 int BuildUDPSock(in_addr_t listen_ipaddr, uint16_t listen_port);
 int BuildTCPSock(in_addr_t listen_ipaddr, uint16_t listen_port);
 void Exits(int s);
 void SockExit(int s);
+int bigsockbuf(int fd, int dir, int size);
 
 #endif	    /* _SOCKET_H_ */

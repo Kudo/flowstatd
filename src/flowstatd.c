@@ -30,6 +30,8 @@
 #include <zlib.h>
 #include "flowstatd.h"
 #include "jansson.h"
+#include "liblogger/liblogger.h"
+#include "liblogger/file_logger.h"
 #include "command.h"
 #include "multiplex.h"
 #include "netflow.h"
@@ -57,16 +59,16 @@ static int LoadWhitelist(char *fname)
 
     jsonRoot = json_load_file(fname, 0, &jsonError);
     if (jsonRoot == NULL) {
-	fprintf(stderr, "Unable to parse whitelist file. fname[%s] jsonErr[%s@%d]\n", fname, jsonError.text, jsonError.line);
+	LogError("Unable to parse whitelist file. fname[%s] jsonErr[%s@%d]", fname, jsonError.text, jsonError.line);
 	exit(EXIT_FAILURE);
     }
     if (!json_is_object(jsonRoot)) {
-	fprintf(stderr, "Invalid file format\n");
+	LogError("Invalid file format.");
 	goto Exit;
     }
     jsonData = json_object_get(jsonRoot, "whitelistIps");
     if (jsonData == NULL || !json_is_array(jsonData)) {
-	fprintf(stderr, "Invalid file format\n");
+	LogError("Invalid file format.");
 	goto Exit;
     }
 
@@ -76,7 +78,7 @@ static int LoadWhitelist(char *fname)
     for (i = 0; i < MAX_WHITELIST && i < length; ++i) {
 	json_t *hostValue = json_array_get(jsonData, i);
 	if (!json_is_string(hostValue)) {
-	    //fprintf(stderr, "Invalid file format\n");
+	    //LogError("Invalid file format.");
 	    continue;
 	}
 
@@ -165,7 +167,7 @@ int ImportRecord(char *fname)
 	if ((ptr = realloc(ipTable, sizeof(struct hostflow) * tmpVal)) == NULL)
 	{
 	    free(ipTable);
-	    fprintf(stderr, "Failed to reallocate memory %zu bytes\n", sizeof(struct hostflow) * tmpVal);
+	    LogError("Unable to reallocate memory %zu bytes.", sizeof(struct hostflow) * tmpVal);
 	    exit(EXIT_FAILURE);
 	}
 	ipTable = ptr;
@@ -195,7 +197,7 @@ static void Update(int s)
 
 static void Usage(char *progName)
 {
-    printf("flowstatd version %d.%d.%d\nUsage: %s [-v] [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, FLOWSTATD_VERSION_BUILD, progName);
+    printf("flowstatd version %d.%d.%d\nUsage: %s [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, FLOWSTATD_VERSION_BUILD, progName);
     exit(EXIT_SUCCESS);
 }
 
@@ -207,6 +209,7 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
     json_t *jsonRoot = NULL;
     json_t *jsonData = NULL;
     json_error_t jsonError = {0};
+    tFileLoggerInitParams fileInitParams = {0};
 
     jsonRoot = json_load_file(fname, 0, &jsonError);
     if (jsonRoot == NULL) {
@@ -353,6 +356,33 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
     }
     *commandBindPort = htons(json_integer_value(jsonData));
 
+    // [7] Debug log
+    fileInitParams.moduleName = "flowstatd";
+    fileInitParams.logLevel = Disable;
+    fileInitParams.fileName = (char *) "flowstatd.log";
+    jsonData = json_object_get(jsonRoot, "logLevel");
+    if (jsonData != NULL && json_is_string(jsonData)) {
+#define CHK_LOG_LEVEL(strLevel, LevelEnum) { if (strcasecmp(json_string_value(jsonData), strLevel) == 0) fileInitParams.logLevel = LevelEnum; }
+	CHK_LOG_LEVEL("trace", Trace);
+	CHK_LOG_LEVEL("debug", Debug);
+	CHK_LOG_LEVEL("warning", Warn);
+	CHK_LOG_LEVEL("error", Error);
+	CHK_LOG_LEVEL("fatal", Fatal);
+	CHK_LOG_LEVEL("disable", Disable);
+    }
+    jsonData = json_object_get(jsonRoot, "logPath");
+    if (jsonData != NULL && json_is_string(jsonData))
+	fileInitParams.fileName = (char *) json_string_value(jsonData);
+    if (InitLogger(LogToFile, &fileInitParams) == -1) {
+	fprintf(stderr, "Unable to setup logger\n");
+	goto Exit;
+    }
+
+    // [8] Daemonize
+    jsonData = json_object_get(jsonRoot, "daemonize");
+    if (jsonData != NULL && json_is_true(jsonData)) {
+	daemonMode = 1;
+    }
 
 Exit:
     if (jsonRoot != NULL) { json_decref(jsonRoot); }
@@ -365,12 +395,6 @@ static int RcvNetListCmp(const void *a, const void *b)
     struct subnet *tmpB = (struct subnet *) b;
 
     return (int) tmpA->net - tmpB->net;
-}
-
-void Warn(const char *msg)
-{
-    if (verbose)
-	fprintf(stderr, "%s\n", msg);
 }
 
 void Diep(const char *s)
@@ -395,28 +419,14 @@ int main(int argc, char *argv[])
 
     int nev;
 
-    verbose = 0;
     daemonMode = 0;
-    debug = 0;
     sumIpCount = 0;
     strncpy(configFile, DEF_CONFIG_FILE, 99);
 
-    while ((ch = getopt(argc, argv, "vdDf:")) != -1)
+    while ((ch = getopt(argc, argv, "f:")) != -1)
     {
 	switch ((char) ch)
 	{
-	    case 'v':		/* Verbose mode */
-		verbose = 1;
-		break;
-
-	    case 'd':		/* Debug mode */
-		debug = 1;
-		break;
-
-	    case 'D':		/* Daemon mode */
-		daemonMode = 1;
-		break;
-
 	    case 'f':
 		strncpy(configFile, optarg, 99);
 		break;
@@ -436,7 +446,7 @@ int main(int argc, char *argv[])
     ipTable = (struct hostflow *) malloc(sizeof(struct hostflow) * sumIpCount);
     if (ipTable == NULL)
     {
-	fprintf(stderr, "Failed to allocate memory %zu bytes\n", sizeof(struct hostflow) * sumIpCount);
+	LogError("Unable to allocate memory %zu bytes.", sizeof(struct hostflow) * sumIpCount);
 	return -1;
     }
     memset(ipTable, 0, sizeof(struct hostflow) * sumIpCount);
@@ -461,6 +471,8 @@ int main(int argc, char *argv[])
     setvbuf(stdout, NULL, _IONBF, 0);
 
     netflowSockFd = BuildUDPSock(bindIpAddr, netflowBindPort);
+    if (bigsockbuf(netflowSockFd, SO_RCVBUF, SOCKET_RCV_BUFSIZE) < 0)
+	LogError("bigsockbuf() failed\n");
     flowstatdSockFd = BuildTCPSock(bindIpAddr, commandBindPort);
 
     multiplexer = NewMultiplexer();
@@ -472,7 +484,7 @@ int main(int argc, char *argv[])
 
     plen = sizeof(struct sockaddr_in);
 
-    if (!verbose && !debug && daemonMode)
+    if (daemonMode)
     {
 	if (daemon(0, 0) == -1)
 	{
@@ -493,7 +505,7 @@ int main(int argc, char *argv[])
 #if 0
 	    if (evlist[i].flags & EV_ERROR) 
 	    {
-		fprintf(stderr, "kevent() EV_ERROR: %s\n", strerror(evlist[i].data));
+		LogError("kevent() EV_ERROR[%s]", strerror(evlist[i].data));
 		exit(EXIT_FAILURE);
 	    }
 #endif
@@ -540,7 +552,7 @@ int main(int argc, char *argv[])
 		    
 		    while ((n = recv(peerFd, buf, sizeof(buf) - 1, 0)) > 0) {
 			if (length + n > sizeof(command) - 1) {
-			    fprintf(stderr, "Socket receiver exceeds maximum size\n");
+			    LogError("Socket receiver exceeds maximum size.");
 			    n = sizeof(command) - 1 - length;
 			    strncat(command + length, buf, n);
 			    break;
@@ -561,6 +573,7 @@ int main(int argc, char *argv[])
     close(netflowSockFd);
     close(flowstatdSockFd);
     free(ipTable);
+    DeInitLogger();
 
     return 0;
 }

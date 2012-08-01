@@ -11,6 +11,6 @@ set(FLOWSTATD_SRCS
 )
 
 find_package(ZLIB REQUIRED)
-link_libraries(${ZLIB_LIBRARIES} jansson)
+link_libraries(${ZLIB_LIBRARIES} jansson logger-static)
 add_executable(flowstatd ${FLOWSTATD_SRCS})
 install(TARGETS flowstatd RUNTIME DESTINATION bin)

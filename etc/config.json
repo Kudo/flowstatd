@@ -4,6 +4,9 @@
     "netflowListenPort": 9992,
     "commandListenPort": 9993,
     "secretKey": "secretKey",
+    "logLevel": "error",
+    "logPath": "flowstatd.log",
+    "daemonize": false,
 
     "myNetwork": "140.123.0.0/16",
 

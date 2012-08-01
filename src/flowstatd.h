@@ -26,8 +26,8 @@
 #include <netinet/in.h>
 
 #define FLOWSTATD_VERSION_MAJOR	    1
-#define FLOWSTATD_VERSION_MINOR	    0
-#define FLOWSTATD_VERSION_BUILD	    1
+#define FLOWSTATD_VERSION_MINOR	    1
+#define FLOWSTATD_VERSION_BUILD	    0
 
 #define TRUE		1
 #define FALSE		0
@@ -76,9 +76,7 @@ struct subnet {
 /*
  * Global variables
  */
-extern int verbose;
 extern int daemonMode;
-extern int debug;
 extern struct tm localtm;
 extern struct hostflow *ipTable;
 extern struct hostflow *hashTable;
@@ -91,6 +89,5 @@ extern uint sumIpCount;
 
 int ImportRecord(char *fname);
 void ExportRecord(int mode);
-void Warn(const char *msg);
 void Diep(const char *s);
 #endif
