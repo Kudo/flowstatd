@@ -197,7 +197,7 @@ static void Update(int s)
 
 static void Usage(char *progName)
 {
-    printf("flowstatd version %d.%d.%d\nUsage: %s [-v] [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, FLOWSTATD_VERSION_BUILD, progName);
+    printf("flowstatd version %d.%d.%d\nUsage: %s [-f /path/to/config.json]\n", FLOWSTATD_VERSION_MAJOR, FLOWSTATD_VERSION_MINOR, FLOWSTATD_VERSION_BUILD, progName);
     exit(EXIT_SUCCESS);
 }
 
@@ -378,6 +378,12 @@ static int LoadConfig(char *fname, in_addr_t *bindIpAddr, uint16_t *netflowBindP
 	goto Exit;
     }
 
+    // [8] Daemonize
+    jsonData = json_object_get(jsonRoot, "daemonize");
+    if (jsonData != NULL && json_is_true(jsonData)) {
+	daemonMode = 1;
+    }
+
 Exit:
     if (jsonRoot != NULL) { json_decref(jsonRoot); }
     return nSubnet;
@@ -413,28 +419,14 @@ int main(int argc, char *argv[])
 
     int nev;
 
-    verbose = 0;
     daemonMode = 0;
-    debug = 0;
     sumIpCount = 0;
     strncpy(configFile, DEF_CONFIG_FILE, 99);
 
-    while ((ch = getopt(argc, argv, "vdDf:")) != -1)
+    while ((ch = getopt(argc, argv, "f:")) != -1)
     {
 	switch ((char) ch)
 	{
-	    case 'v':		/* Verbose mode */
-		verbose = 1;
-		break;
-
-	    case 'd':		/* Debug mode */
-		debug = 1;
-		break;
-
-	    case 'D':		/* Daemon mode */
-		daemonMode = 1;
-		break;
-
 	    case 'f':
 		strncpy(configFile, optarg, 99);
 		break;
@@ -492,7 +484,7 @@ int main(int argc, char *argv[])
 
     plen = sizeof(struct sockaddr_in);
 
-    if (!verbose && !debug && daemonMode)
+    if (daemonMode)
     {
 	if (daemon(0, 0) == -1)
 	{

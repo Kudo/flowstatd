@@ -76,9 +76,7 @@ struct subnet {
 /*
  * Global variables
  */
-extern int verbose;
 extern int daemonMode;
-extern int debug;
 extern struct tm localtm;
 extern struct hostflow *ipTable;
 extern struct hostflow *hashTable;

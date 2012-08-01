@@ -6,6 +6,7 @@
     "secretKey": "secretKey",
     "logLevel": "error",
     "logPath": "flowstatd.log",
+    "daemonize": false,
 
     "myNetwork": "140.123.0.0/16",
 
